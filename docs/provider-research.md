@@ -1,12 +1,32 @@
-# Provider Research
+# Provider And Tool Research
 
 Last reviewed: 2026-05-04.
 
-Provider APIs change often. This document captures what is known now and what should be verified during implementation.
+Provider APIs and AI tool storage formats change often. This document captures what is known now and what should be verified during implementation.
+
+## Research Lens
+
+Silver Usage Report needs broad reporting coverage, not perfect tracking coverage.
+
+Evaluate each source by:
+
+- Can it report historical or recent usage now?
+- Does it require the user to install ongoing tracking?
+- Does it work for many users or only one tool?
+- Can it produce aggregate metrics without exposing prompts or source code?
+- Can the report row be labeled with a clear confidence level?
+
+The Deel article that triggered the Silver thread claims Deel Engage integrates with Anthropic Claude, Cursor, and GitHub Copilot, with Microsoft Copilot and Gemini planned. It also says OpenAI enterprise analytics need work on OpenAI's side. Treat these as competitive/category signals, not as proof that equivalent public APIs are available to this project.
+
+## Provider Org APIs Are Out Of Current Scope
+
+Current product scope is individual employee/community self-reporting, not enterprise/company import.
+
+Employees usually do not have provider admin keys, organization billing exports, or company-wide analytics permissions. Therefore provider org APIs are useful research context, but they should not drive the MVP.
 
 ## Anthropic
 
-Best MVP candidate.
+Out of scope for current employee-focused MVP.
 
 Anthropic documents an organization-level Usage and Cost Admin API:
 
@@ -18,7 +38,14 @@ Anthropic documents an organization-level Usage and Cost Admin API:
 - Requires an Admin API key, not a standard API key.
 - Admin API is unavailable for individual accounts.
 
-Important implementation detail: the key should be handled by the CLI importer unless a secure browser-side connection story is explicitly designed.
+Implementation detail: do not build this path in the current MVP. If company/admin mode is ever added, admin keys should stay outside Silver's web app and be handled in the organization's own environment.
+
+Fit for Silver Usage Report:
+
+- High confidence for organization admins if this scope is ever added.
+- Not useful for the current employee self-report mode.
+- Individual accounts cannot use this Admin API.
+- Should not appear as a primary import path in the MVP.
 
 Docs:
 
@@ -27,7 +54,7 @@ Docs:
 
 ## OpenAI
 
-Strong MVP candidate.
+Out of scope for current employee-focused MVP.
 
 OpenAI documents organization usage endpoints and a costs endpoint:
 
@@ -38,6 +65,13 @@ OpenAI documents organization usage endpoints and a costs endpoint:
 - The costs endpoint is preferred for financial reconciliation.
 
 Implementation detail: use usage endpoints for token breakdowns and costs endpoint for spend reconciliation.
+
+Fit for Silver Usage Report:
+
+- High confidence for organization admins if this scope is ever added.
+- Not useful for most employees.
+- Not enough for users whose AI usage happens through coding tools or consumer products.
+- Should not appear as a primary import path in the MVP.
 
 Docs:
 
@@ -57,6 +91,11 @@ For a first Gemini integration, prefer:
 - Local wrapper logs.
 - Google Cloud billing export, if the user's Gemini usage is billed through Google Cloud.
 - Future proxy or SDK instrumentation.
+
+Fit for Silver Usage Report:
+
+- Medium or low confidence unless backed by structured billing/export data.
+- Useful as an adapter after the report contract exists.
 
 Docs:
 
@@ -81,6 +120,12 @@ For a first xAI integration, prefer:
 - CSV export if available.
 - Local wrapper/proxy instrumentation.
 
+Fit for Silver Usage Report:
+
+- High confidence for structured response logs.
+- Medium or low confidence for manual console exports.
+- Not a blocker for MVP.
+
 Docs:
 
 - https://docs.x.ai/console/usage
@@ -89,24 +134,185 @@ Docs:
 
 ## Local AI Coding Tools
 
-Local tools are a good follow-up because they provide immediate value for developers:
+Local tools matter because the X thread showed that single-provider reporting will not be enough.
 
-- Claude Code logs.
-- Codex logs.
-- Gemini CLI logs.
-- Cursor or Copilot exports where available.
+Candidate tools:
+
+- Claude Code.
+- Codex.
+- Cursor.
+
+MVP support targets:
+
+1. Cursor.
+2. Claude Code.
+3. Codex.
+
+Other tools can be considered later after the core report flow works.
 
 Privacy risk is higher because local logs may include prompts, responses, file paths, tool outputs, or source code. The importer must parse locally and upload only aggregate metrics.
 
-## Provider Priority
+Important distinction: providers do not generally write local logs on the user's machine. Local import means reading data produced by tools such as Cursor, Claude Code, Codex, or user apps. Each tool needs its own adapter and privacy review.
+
+### Tool Variant Support Matrix
+
+The product should distinguish providers from clients.
+
+For example, "Anthropic" is the provider, while "Claude Code" or a `claude` CLI is the client. "OpenAI" is the provider, while Codex Desktop or a Codex VS Code integration is the client.
+
+Initial support posture:
+
+| Client / tool | Should support? | Likely source | Current confidence |
+| --- | --- | --- | --- |
+| Codex Desktop | Yes | Local Codex telemetry SQLite | Medium after one-machine validation |
+| Codex VS Code / Codex Desktop with VS Code source | Yes, if it shares `.codex` telemetry | Local Codex telemetry SQLite | Medium after one-machine validation |
+| Claude Code | Yes | Local stats/logs or provider/account data | Unknown until storage is inspected |
+| Cursor | Yes | Export, local telemetry, or manual | Unknown |
+
+Do not assume that two clients for the same provider store data the same way. Each client needs its own adapter contract.
+
+Fit for Silver Usage Report:
+
+- Good for coverage.
+- Medium confidence when logs include token fields.
+- Requires careful redaction tests.
+- Should not require ongoing tracking.
+
+### Codex Local History
+
+Early user signal: a separate Codex session was reportedly able to inspect the local machine and estimate how much had been spent.
+
+This suggests Codex may be a strong first target for agent-assisted local introspection.
+
+Validated local finding from one machine:
+
+- Codex Desktop stores local logs in `C:\Users\Gabriel\.codex\logs_2.sqlite`.
+- Rows from `codex_core::session::turn` can contain `post sampling token usage`.
+- These rows include `turn_id`, `model`, `total_usage_tokens`, and `estimated_token_count`.
+- Deduplicating by `turn_id` produced a May 2026 local usage report by day and model.
+- The source measured Codex Desktop local usage, not total OpenAI account usage.
+- The referenced session metadata included `originator: Codex Desktop` and `source: vscode`, which suggests the same `.codex` telemetry may cover the VS Code-hosted Codex experience. This still needs validation across installations.
+
+Open validation questions:
+
+- Where does Codex store usage metadata?
+- Is token/spend data stored directly, or must it be reconstructed from session metadata?
+- Can aggregate usage be computed without reading prompt/response text?
+- Can the importer scope itself to usage metadata only?
+- How does pricing get determined if the local record only contains model and token counts?
+- Are the SQLite schema, module names, and log field names stable across versions?
+- Are auto-review/internal approval tokens useful for Silver's report, or should they be separated from user-directed work?
+- Does Codex VS Code always write to the same `.codex/logs_2.sqlite` telemetry store?
+
+Fit for Silver Usage Report:
+
+- Potentially high value for the Silver audience if many users use Codex.
+- Medium confidence until storage format and pricing reconstruction are verified.
+- Privacy-sensitive because Codex session history may include rich transcripts and tool outputs.
+- Should report `source: "codex_local_telemetry"` and clearly label it as machine-local usage.
+
+### Claude Code
+
+Claude Code should be supported as a separate adapter from Anthropic provider APIs.
+
+Important distinction:
+
+- Anthropic Admin Usage/Cost API covers organization-level provider usage for admins.
+- Claude Code usage may be stored locally by the client, but that storage format must be discovered.
+- A personal Claude/Claude Code user may not have Anthropic Admin API access.
+
+Open validation questions:
+
+- Does Claude Code expose a local usage summary, stats command, or telemetry file?
+- Can token usage be extracted without reading conversation transcripts?
+- Can cost be derived, or only token counts?
+- Are local records scoped to one machine or synced across devices?
+
+Fit for Silver Usage Report:
+
+- Desired adapter because Gabriel explicitly mentioned Anthropic/Claude-style usage.
+- Unknown confidence until local storage is inspected.
+- Should not be blocked on Anthropic Admin API because that only helps org admins.
+
+### Cursor
+
+Cursor is one of the three MVP tools.
+
+Open validation questions:
+
+- Does Cursor expose user-visible token usage or cost data?
+- Does Cursor store local telemetry that includes token counts?
+- Does Cursor provide exports or account-level usage screens available to a normal employee?
+- Can any local usage data be read without source code, prompts, responses, or file paths?
+- Is usage scoped to one machine, one workspace, or the user's Cursor account?
+
+Fit for Silver Usage Report:
+
+- Required MVP adapter because Cursor is one of the most common AI coding tools.
+- Confidence unknown until storage/export behavior is inspected.
+- Manual/paste fallback should exist if no safe local telemetry is found.
+
+## Existing Trackers Mentioned In The Thread
+
+Existing trackers are useful references, but they are not the first product.
+
+### Claude Code Usage Monitors
+
+Strength:
+
+- Good real-time usage monitoring for Claude Code.
+
+Why insufficient:
+
+- Claude Code only.
+- Installation required.
+- Future/ongoing tracking.
+
+### Codeburn-Style TUI Dashboards
+
+Strength:
+
+- Good local observability across multiple coding tools.
+
+Why insufficient:
+
+- Installation required.
+- User-facing dashboard, not Silver-facing report intake.
+- Still asks users to begin tracking and wait.
+
+### Burntop-Style Products
+
+Strength:
+
+- Good inspiration for sharing progress and analytics.
+
+Why insufficient:
+
+- Tracker-first framing.
+- Silver needs a quick reporting flow tied to its own intake/review needs.
+
+### SDKs, Gateways, And Proxies
+
+Strength:
+
+- Strong future traffic measurement.
+- Useful for apps already routed through them.
+
+Why insufficient:
+
+- Requires prior instrumentation.
+- Does not recover historical usage.
+- Does not work for all AI coding tools.
+
+## Recommended Priority
 
 Recommended order:
 
-1. Anthropic provider API.
-2. OpenAI provider API.
-3. Manual CSV/JSON import.
-4. Local AI coding tool logs.
-5. xAI response-log import.
-6. Gemini response-log or billing-export import.
-7. MCP interface over the same importer core.
-
+1. Web report session with sample/manual data.
+2. CSV/JSON report import.
+3. CLI/MCP importer skeleton.
+4. Codex local telemetry adapter.
+5. Claude Code local usage investigation.
+6. Cursor local/export investigation.
+7. Manual/paste fallback polish for all three tools.
+8. Future tools after MVP validation.

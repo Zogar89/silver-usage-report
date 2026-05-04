@@ -2,109 +2,232 @@
 
 ## Summary
 
-Silver Token Ledger is a web-first token spending tracker for developers and small teams using multiple AI providers and AI coding tools.
+Silver Usage Report is a web-first reporting flow for AI token usage.
 
 The product should answer:
 
-- How many tokens did I use?
-- How much did it cost?
-- Which provider and model drove the spend?
-- What changed this week or month?
-- Can I share this usage with Silver without exposing my private data?
+- How can a user report their AI token usage to Silver quickly?
+- What tools/providers contributed to that usage?
+- How much of the report is actual provider data versus estimated or manual data?
+- Can Silver compare reports across people who use different AI tools?
+- Can the user submit useful metrics without exposing private data?
+
+The product is not primarily a personal finance dashboard. A dashboard can exist, but the core job is intake: make usage reporting easy, trustworthy, and normalized.
+
+## Problem Discovery
+
+The X thread around Silver's ask surfaced several rejected paths. The quote tweet came from Deel's "Token spend is coming for your performance review" article, so the broader category context is AI usage becoming part of workforce, performance, and management conversations.
+
+The product should respond to that context without copying the framing. Silver Usage Report should make token reporting transparent, user-controlled, and source-labeled. It should not imply that token spend alone equals productivity.
+
+### Existing Claude Code Trackers
+
+People suggested real-time Claude Code usage monitors. These help an individual observe Claude Code usage, but they are too narrow for Silver's need.
+
+Reason rejected:
+
+- Works for Claude Code only.
+- Requires local installation.
+- Measures ongoing/future usage.
+- Does not automatically produce a Silver-ready report.
+
+### TUI Dashboards Like Codeburn
+
+Codeburn-style tools show where AI coding tokens go across tools like Claude Code, Codex, and Cursor.
+
+Reason rejected:
+
+- Still requires users to install software.
+- Still assumes ongoing tracking.
+- Silver would have to wait for users to collect data.
+- It is built as user-facing observability, not Silver-facing report intake.
+
+### OpenCode `/stats`
+
+OpenCode can show usage stats for OpenCode users.
+
+Reason rejected:
+
+- It does not work for everyone.
+- Silver needs provider/tool coverage across heterogeneous workflows.
+
+### Existing AI Usage Products
+
+Products like Burntop may provide AI usage tracking and sharing.
+
+Reason rejected or insufficient:
+
+- Useful as inspiration, but likely still tracker-first.
+- Silver needs a purpose-built flow for report submission and normalization.
+- The key user action is "submit my usage to Silver," not "adopt a new analytics product."
+
+### AI SDKs, Gateways, And Proxies
+
+SDK/gateway tracking can measure traffic that passes through the gateway.
+
+Reason rejected or deferred:
+
+- Captures future traffic only.
+- Requires prior instrumentation.
+- Does not help users who already used Claude Code, Cursor, OpenCode, Gemini, Grok, or direct provider consoles outside that gateway.
+
+### Candidate Tracking / ATS Integration
+
+Silver already tracks candidates internally.
+
+Reason rejected:
+
+- The missing piece is not candidate status.
+- The missing piece is external usage reporting.
 
 ## Users
 
 Primary users:
 
-- Developers using AI coding agents or provider APIs.
-- Small teams that want a quick usage snapshot.
-- Silver community members who want to participate in an open benchmark or usage challenge.
+- Developers who want to submit AI usage to Silver.
+- Silver community members participating in usage challenges, benchmarks, or open calls.
+- External participants who use different AI tools.
 
 Secondary users:
 
-- Maintainers adding provider integrations.
-- Silver admins reviewing aggregate usage submissions.
+- Silver admins reviewing submitted usage reports.
+- Maintainers adding provider and tool adapters.
+- Developers who want a local preview before sharing anything.
 
 ## Goals
 
-- Provide a useful usage dashboard within minutes.
-- Support historical imports where provider APIs allow it.
-- Support one-shot local import without requiring a long-running daemon.
-- Normalize usage across providers.
-- Make the privacy boundary clear enough that users trust it.
+- Let a user submit a useful usage report within minutes.
+- Avoid requiring ongoing background tracking.
+- Support one-shot local import for tools that expose local usage data.
+- Provide manual/CSV fallback when automation is unavailable.
+- Avoid relying on provider org/admin APIs.
+- Normalize data across providers and tools.
+- Preserve a clear privacy boundary.
+- Provide a healthier alternative to opaque HR/performance-surveillance framing.
 - Keep the implementation open source.
 
 ## Non-Goals
 
 - Replacing provider billing dashboards.
+- Building a full spend management suite.
 - Acting as a proxy for all future AI traffic in the first version.
 - Storing prompts or conversations.
-- Managing team budgets or enforcing hard spend limits in the first version.
+- Ranking users by token spend without context.
+- Treating token spend as a direct performance score.
+- Managing team budgets or enforcing spend limits in the first version.
 - Building a desktop app.
+- Solving Silver's internal candidate tracking.
+- Importing company-wide or team-wide enterprise usage.
+- Asking employees for provider admin keys or organization billing exports.
 
 ## Core User Flow
 
-1. User visits the Silver Token Ledger web app.
-2. The app creates a short-lived import session.
+1. User visits the Silver Usage Report web app.
+2. The app creates a short-lived report session.
 3. User chooses an import method:
-   - Connect provider admin key in browser.
    - Run the one-shot CLI importer.
+   - Paste stats from a supported tool.
    - Upload CSV/JSON.
+   - Enter manual totals for unsupported tools.
 4. User previews normalized usage before final submission.
-5. Dashboard shows spend and token breakdowns.
-6. User can delete the imported data.
+5. User sees confidence and source labels for each row.
+6. User confirms submission.
+7. Silver receives aggregate report data.
+8. User can delete the submitted report.
+
+Reporter login is not required for the MVP. The report session should use a short code and private link. Silver admins need login for the internal review view.
 
 ## MVP Screens
 
-- Landing/import screen.
-- Import session page.
-- Provider connection form.
+- Report start screen.
+- Report session page.
+- Import method picker.
+- Tool-specific import instructions.
 - CLI instructions page.
-- Import preview table.
-- Dashboard overview.
-- Provider/model breakdown.
+- CSV/JSON/manual fallback form.
+- Report preview table.
+- Confirmation screen.
+- Silver admin report review.
 - Data deletion page.
 
-## Normalized Usage Model
+## MVP Import Strategy
+
+The MVP should support multiple ways for an individual to report usage:
+
+- Local MCP/assistant import for supported tools.
+- One-shot CLI helper.
+- Pasted stats or exports when supported.
+- CSV/JSON import.
+- Manual entry.
+- Optional screenshot evidence only with explicit opt-in.
+
+The MVP should not ask employees for provider admin keys or organization credentials.
+
+## Trust Requirements
+
+Every submitted row must include:
+
+- Source.
+- Confidence.
+- Evidence metadata when not manual.
+- Preview confirmation.
+
+The server should reject raw prompts, responses, source code, API keys, raw logs, environment variables, and full local paths.
+
+## Normalized Report Model
 
 ```ts
-type UsageBucket = {
+type UsageReportRow = {
   provider: "anthropic" | "openai" | "gemini" | "xai" | "other";
-  source: "provider_api" | "local_log" | "csv" | "manual";
-  bucketStart: string;
-  bucketEnd: string;
-  bucketWidth: "1m" | "1h" | "1d" | "custom";
+  tool?: "claude_code" | "cursor" | "codex" | "other";
+  source: "codex_local_telemetry" | "tool_stats_paste" | "local_log" | "csv" | "json" | "manual" | "screenshot_ocr" | "response_log";
+  periodStart: string;
+  periodEnd: string;
+  periodWidth: "1h" | "1d" | "1w" | "1m" | "custom";
   model?: string;
-  projectId?: string;
-  apiKeyId?: string;
   requestCount?: number;
   inputTokens?: number;
   outputTokens?: number;
   cachedInputTokens?: number;
   cacheCreationInputTokens?: number;
   reasoningTokens?: number;
-  audioInputTokens?: number;
-  imageInputTokens?: number;
+  totalTokens?: number;
   costUsd?: number;
-  costSource: "provider_actual" | "provider_report" | "estimated" | "unknown";
+  costSource: "provider_actual" | "provider_report" | "estimated" | "manual" | "unknown";
+  confidence: "high" | "medium" | "low";
+  evidence?: EvidenceMetadata;
+};
+
+type EvidenceMetadata = {
+  adapter?: string;
+  adapterVersion?: string;
+  rowCount?: number;
+  dedupeKey?: string;
+  queryFingerprint?: string;
+  warnings?: string[];
 };
 ```
 
-## Import Contract
+## Report Contract
 
-The CLI and browser importers should produce the same normalized payload:
+All import paths should produce the same normalized payload:
 
 ```ts
-type ImportPayload = {
-  importSessionId: string;
+type UsageReportPayload = {
+  reportSessionId: string;
   generatedAt: string;
   schemaVersion: "2026-05-04";
-  buckets: UsageBucket[];
-  warnings: ImportWarning[];
+  rows: UsageReportRow[];
+  warnings: ReportWarning[];
+  userConfirmation: {
+    previewShown: boolean;
+    confirmedAt: string;
+  };
 };
 
-type ImportWarning = {
-  provider: string;
+type ReportWarning = {
+  provider?: string;
+  tool?: string;
   code: string;
   message: string;
 };
@@ -112,9 +235,11 @@ type ImportWarning = {
 
 ## UX Copy Principles
 
-- Say exactly what data will be uploaded.
+- Say exactly what data will be submitted to Silver.
 - Show a preview before upload.
-- Use "actual cost" only when the provider returns billed cost.
-- Use "estimated cost" when calculating from token prices.
+- Say "actual cost" only when the provider returns billed cost.
+- Say "estimated cost" when calculating from token prices.
+- Label manual entries clearly.
+- Avoid implying token spend equals productivity.
+- Avoid performance-review scare language.
 - Make deletion visible.
-
