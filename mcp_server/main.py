@@ -2,10 +2,16 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib import request
+from urllib import error, request
 
 from app.adapters.codex_local import preview_codex_local_usage
 from app.services.imports import parse_json_rows
+
+HTTP_HEADERS = {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    "User-Agent": "silver-usage-report-mcp/0.1",
+}
 
 
 def preview_report(payload: Any) -> dict[str, object]:
@@ -121,13 +127,27 @@ def _post_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
         url,
         data=body,
         method=payload.get("method", "POST"),
-        headers={"content-type": "application/json"},
+        headers=HTTP_HEADERS,
     )
-    with request.urlopen(http_request, timeout=30) as response:
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with request.urlopen(http_request, timeout=30) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except error.HTTPError as exc:
+        raise RuntimeError(_format_http_error(url, exc)) from exc
 
 
 def _get_json(url: str) -> dict[str, Any]:
-    http_request = request.Request(url, method="GET")
-    with request.urlopen(http_request, timeout=30) as response:
-        return json.loads(response.read().decode("utf-8"))
+    http_request = request.Request(url, method="GET", headers=HTTP_HEADERS)
+    try:
+        with request.urlopen(http_request, timeout=30) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except error.HTTPError as exc:
+        raise RuntimeError(_format_http_error(url, exc)) from exc
+
+
+def _format_http_error(url: str, exc: error.HTTPError) -> str:
+    response_body = exc.read().decode("utf-8", "replace").strip()
+    message = f"Silver API request failed: HTTP {exc.code} {exc.reason} for {url}"
+    if response_body:
+        message = f"{message}: {response_body}"
+    return message

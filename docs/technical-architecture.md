@@ -241,6 +241,17 @@ python -m cli.main submit --session SESSION_ID --file report.json --base-url htt
 python -m cli.main submit-codex --session SESSION_ID --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url http://localhost:8002
 ```
 
+For candidates, Silver should publish standalone collector binaries built from
+the same CLI entrypoint. The web flow should prefer:
+
+```powershell
+.\silver-usage-collector.exe submit-codex --session SESSION_ID --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url https://open.silver.dev
+```
+
+Python commands remain development and fallback commands. The collector binaries
+are built per operating system with PyInstaller because PyInstaller packages for
+the host OS rather than cross-compiling.
+
 ## MCP Server
 
 Python MCP server:

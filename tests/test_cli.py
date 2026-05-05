@@ -3,6 +3,7 @@ import sqlite3
 from pathlib import Path
 from unittest.mock import patch
 
+import cli.main as cli_main
 from cli.main import main
 
 
@@ -338,6 +339,34 @@ def test_cli_submit_codex_previews_then_posts_report(capsys):
     finally:
         connection.close()
         db_path.unlink(missing_ok=True)
+
+
+def test_cli_post_json_identifies_itself_to_http_proxies():
+    captured = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    def fake_urlopen(http_request, timeout):
+        captured["user_agent"] = http_request.get_header("User-agent")
+        captured["accept"] = http_request.get_header("Accept")
+        captured["timeout"] = timeout
+        return FakeResponse()
+
+    with patch("cli.main.request.urlopen", side_effect=fake_urlopen):
+        result = cli_main._post_json("https://example.test/api", {"method": "POST", "json": {"rows": []}})
+
+    assert result == {}
+    assert captured["user_agent"] == "silver-usage-report-cli/0.1"
+    assert captured["accept"] == "application/json"
+    assert captured["timeout"] == 30
 
 
 def _write_codex_usage_row(connection: sqlite3.Connection) -> None:

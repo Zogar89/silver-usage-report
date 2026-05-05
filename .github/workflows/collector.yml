@@ -1,0 +1,52 @@
+name: Collector binaries
+
+on:
+  workflow_dispatch:
+  release:
+    types:
+      - published
+
+jobs:
+  build:
+    name: Build collector (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-latest
+          - ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install collector build dependencies
+        run: python -m pip install -e ".[collector]"
+
+      - name: Build standalone collector
+        run: python -m PyInstaller packaging/pyinstaller/silver-usage-collector.spec --noconfirm --clean
+
+      - name: Smoke test collector
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            ./dist/silver-usage-collector.exe --help
+          else
+            ./dist/silver-usage-collector --help
+          fi
+
+      - name: Upload collector artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: silver-usage-collector-${{ runner.os }}
+          path: |
+            dist/silver-usage-collector
+            dist/silver-usage-collector.exe
+          if-no-files-found: error

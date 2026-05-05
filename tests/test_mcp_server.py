@@ -4,6 +4,7 @@ import json
 import sqlite3
 from pathlib import Path
 
+import mcp_server.main as mcp_main
 from mcp_server.main import (
     get_report_status,
     preview_codex_local,
@@ -144,6 +145,34 @@ def test_mcp_submit_codex_local_posts_preview_and_submit():
     finally:
         connection.close()
         db_path.unlink(missing_ok=True)
+
+
+def test_mcp_post_json_identifies_itself_to_http_proxies():
+    captured = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    def fake_urlopen(http_request, timeout):
+        captured["user_agent"] = http_request.get_header("User-agent")
+        captured["accept"] = http_request.get_header("Accept")
+        captured["timeout"] = timeout
+        return FakeResponse()
+
+    with patch("mcp_server.main.request.urlopen", side_effect=fake_urlopen):
+        result = mcp_main._post_json("https://example.test/api", {"method": "POST", "json": {"rows": []}})
+
+    assert result == {}
+    assert captured["user_agent"] == "silver-usage-report-mcp/0.1"
+    assert captured["accept"] == "application/json"
+    assert captured["timeout"] == 30
 
 
 def _write_codex_usage_row(connection: sqlite3.Connection) -> None:

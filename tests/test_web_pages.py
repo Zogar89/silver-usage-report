@@ -37,7 +37,7 @@ def test_report_session_page_prioritizes_local_agent_cli_import():
     rendered_text = unescape(html)
     session_id = _session_id_from(html)
     assert "Importacion con agente local" in html
-    assert "python -m cli.main submit-codex" in html
+    assert ".\\silver-usage-collector.exe submit-codex" in rendered_text
     assert f"--session {session_id}" in html
     assert '--sessions-dir "$env:USERPROFILE\\.codex\\sessions"' in rendered_text
     assert "--base-url http://testserver" in html

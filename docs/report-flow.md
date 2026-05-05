@@ -112,15 +112,15 @@ The web app gives the user a prompt, report session, and ready-to-run local comm
 
 The agent inspects local usage metadata, builds normalized rows, and sends them to Silver through the MCP server after preview.
 
-### One-Shot CLI
+### One-Shot Collector
 
 Best when the user is comfortable running a command.
 
 ```powershell
-python -m cli.main submit-codex --session SESSION_ID --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url https://open.silver.dev
+.\silver-usage-collector.exe submit-codex --session SESSION_ID --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url https://open.silver.dev
 ```
 
-The CLI should run once, show a preview, ask for confirmation, submit aggregate rows, and exit. It must not install an ongoing tracker or daemon.
+The collector should run once, show a preview, ask for confirmation, submit aggregate rows, and exit. It must not install an ongoing tracker or daemon. The Python CLI remains available for development and source checkouts, but the candidate path should not require Python.
 
 ### Pasted Stats
 

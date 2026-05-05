@@ -34,17 +34,20 @@ The primary Codex source is now the local session JSONL directory
 rollouts rather than treating `logs_2.sqlite` as a stable public contract.
 SQLite files remain best-effort fallbacks only.
 
-CLI preview:
+Collector preview:
 
 ```powershell
-python -m cli.main preview-codex --sessions-dir "$env:USERPROFILE\.codex\sessions"
+.\silver-usage-collector.exe preview-codex --sessions-dir "$env:USERPROFILE\.codex\sessions"
 ```
 
-CLI submit:
+Collector submit:
 
 ```powershell
-python -m cli.main submit-codex --session SESSION_ID --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url http://localhost:8002
+.\silver-usage-collector.exe submit-codex --session SESSION_ID --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url https://open.silver.dev
 ```
+
+The Python CLI exposes the same commands for development, but candidates should
+use the standalone collector binary when possible.
 
 The legacy SQLite adapter can query `state_5.sqlite` thread rollups, or
 `logs_2.sqlite` rows that match:

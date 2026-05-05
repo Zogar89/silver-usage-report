@@ -90,8 +90,8 @@ Responsibilities:
 
 Candidate package:
 
-```bash
-npx -y @silver/usage-report import
+```powershell
+.\silver-usage-collector.exe submit-codex --session SESSION_ID --base-url https://open.silver.dev
 ```
 
 ### Manual, CSV, And JSON Import

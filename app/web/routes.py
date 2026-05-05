@@ -242,7 +242,7 @@ def _render_session(
 ) -> HTMLResponse:
     base_url = str(request.base_url).rstrip("/")
     codex_cli_command = (
-        "python -m cli.main submit-codex "
+        ".\\silver-usage-collector.exe submit-codex "
         f"--session {session.id} "
         '--sessions-dir "$env:USERPROFILE\\.codex\\sessions" '
         f"--base-url {base_url}"

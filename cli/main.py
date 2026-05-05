@@ -3,10 +3,16 @@ import json
 from pathlib import Path
 from datetime import UTC, datetime
 from typing import Any, Sequence
-from urllib import request
+from urllib import error, request
 
 from app.adapters.codex_local import preview_codex_local_usage, preview_codex_sessions_usage
 from app.services.imports import parse_csv_rows, parse_json_rows
+
+HTTP_HEADERS = {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    "User-Agent": "silver-usage-report-cli/0.1",
+}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -162,10 +168,17 @@ def _post_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
         url,
         data=body,
         method=payload.get("method", "POST"),
-        headers={"content-type": "application/json"},
+        headers=HTTP_HEADERS,
     )
-    with request.urlopen(http_request, timeout=30) as response:
-        response_body = response.read().decode("utf-8")
+    try:
+        with request.urlopen(http_request, timeout=30) as response:
+            response_body = response.read().decode("utf-8")
+    except error.HTTPError as exc:
+        response_body = exc.read().decode("utf-8", "replace").strip()
+        message = f"Silver API request failed: HTTP {exc.code} {exc.reason} for {url}"
+        if response_body:
+            message = f"{message}: {response_body}"
+        raise SystemExit(message) from exc
     if not response_body:
         return {}
     return json.loads(response_body)
