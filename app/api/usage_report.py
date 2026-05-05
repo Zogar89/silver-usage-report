@@ -60,24 +60,7 @@ def get_usage_report_session(
     db: Session = Depends(get_db),
 ) -> ReportSessionSummary:
     session = _get_session_or_404(db, session_id)
-    return ReportSessionSummary(
-        id=session.id,
-        public_code=session.public_code,
-        reporter_label=session.reporter_label,
-        reporter_email=session.reporter_email,
-        github_handle=session.github_handle,
-        x_handle=session.x_handle,
-        candidate_ref=session.candidate_ref,
-        campaign_ref=session.campaign_ref,
-        status=session.status,
-        row_count=len(session.rows),
-        total_tokens=sum(row.total_tokens or 0 for row in session.rows),
-        rows=session.rows,
-        warnings=session.warnings,
-        created_at=session.created_at,
-        expires_at=session.expires_at,
-        submitted_at=session.submitted_at,
-    )
+    return summarize_report_session(session)
 
 
 @router.get("/sessions/{session_id}/status", response_model=ReportSessionSummary)

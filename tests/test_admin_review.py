@@ -212,6 +212,8 @@ def test_admin_detail_shows_warnings_and_row_collection_fields():
     detail = client.get(f"/admin/reports/{session['id']}")
 
     assert detail.status_code == 200
+    assert "Uso por dia" in detail.text
+    assert "2026-05-01" in detail.text
     assert "Senales recolectadas" in detail.text
     assert "Advertencias" in detail.text
     assert "partial_local_data" in detail.text

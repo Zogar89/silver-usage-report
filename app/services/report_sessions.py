@@ -28,6 +28,16 @@ class ReportSession(BaseModel):
     warnings: list[ReportWarning] = Field(default_factory=list)
 
 
+class DailyUsageSummary(BaseModel):
+    day: str
+    request_count: int
+    input_tokens: int
+    output_tokens: int
+    cached_input_tokens: int
+    reasoning_tokens: int
+    total_tokens: int
+
+
 class ReportSessionSummary(BaseModel):
     id: str
     public_code: str
@@ -40,6 +50,7 @@ class ReportSessionSummary(BaseModel):
     status: str
     row_count: int
     total_tokens: int
+    daily_usage: list[DailyUsageSummary]
     rows: list[UsageReportRow]
     warnings: list[ReportWarning]
     created_at: datetime | None = None
@@ -117,6 +128,7 @@ def summarize_report_session(session: ReportSession) -> ReportSessionSummary:
         status=session.status,
         row_count=len(session.rows),
         total_tokens=sum(row.total_tokens or 0 for row in session.rows),
+        daily_usage=_summarize_daily_usage(session.rows),
         rows=session.rows,
         warnings=session.warnings,
         created_at=session.created_at,
@@ -164,6 +176,30 @@ def delete_report_session_data(db: Session, session: ReportSession) -> ReportSes
     db.commit()
     db.refresh(session_model)
     return summarize_report_session(_to_report_session(session_model))
+
+
+def _summarize_daily_usage(rows: list[UsageReportRow]) -> list[DailyUsageSummary]:
+    by_day: dict[str, dict[str, int]] = {}
+    for row in rows:
+        day = row.period_start.date().isoformat()
+        values = by_day.setdefault(
+            day,
+            {
+                "request_count": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cached_input_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 0,
+            },
+        )
+        values["request_count"] += row.request_count or 0
+        values["input_tokens"] += row.input_tokens or 0
+        values["output_tokens"] += row.output_tokens or 0
+        values["cached_input_tokens"] += row.cached_input_tokens or 0
+        values["reasoning_tokens"] += row.reasoning_tokens or 0
+        values["total_tokens"] += row.total_tokens or 0
+    return [DailyUsageSummary(day=day, **values) for day, values in sorted(by_day.items())]
 
 
 def _hash_token(private_token: str) -> str:

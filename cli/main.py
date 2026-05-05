@@ -199,6 +199,11 @@ def _print_preview(rows) -> None:
         print("Top models:")
         for model, model_tokens, model_requests in top_models:
             print(f"- {model}: {model_tokens} tokens, {model_requests} requests")
+    daily_usage = _daily_usage(rows)
+    if daily_usage:
+        print("Uso por dia:")
+        for day, day_tokens, day_requests, day_input, day_output in daily_usage:
+            print(f"- {day}: {day_tokens} tokens, {day_requests} requests, in {day_input}, out {day_output}")
 
 
 def _codex_since(days: int, since: str | None) -> datetime:
@@ -233,6 +238,20 @@ def _top_models(rows) -> list[tuple[str, int, int]]:
     ]
 
 
+def _daily_usage(rows) -> list[tuple[str, int, int, int, int]]:
+    by_day: dict[str, tuple[int, int, int, int]] = {}
+    for row in rows:
+        day = row.period_start.date().isoformat()
+        tokens, requests, input_tokens, output_tokens = by_day.get(day, (0, 0, 0, 0))
+        by_day[day] = (
+            tokens + (row.total_tokens or 0),
+            requests + (row.request_count or 0),
+            input_tokens + (row.input_tokens or 0),
+            output_tokens + (row.output_tokens or 0),
+        )
+    return [(day, *values) for day, values in sorted(by_day.items())]
+
+
 def _post_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
     body = json.dumps(payload["json"]).encode("utf-8")
     http_request = request.Request(
@@ -250,9 +269,14 @@ def _post_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
         if response_body:
             message = f"{message}: {response_body}"
         raise SystemExit(message) from exc
+    except error.URLError as exc:
+        raise SystemExit(f"Silver API request failed: could not reach {url}: {exc.reason}") from exc
     if not response_body:
         return {}
-    return json.loads(response_body)
+    try:
+        return json.loads(response_body)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Silver API request failed: invalid JSON response from {url}: {response_body}") from exc
 
 
 if __name__ == "__main__":

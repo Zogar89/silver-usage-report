@@ -35,8 +35,8 @@ puede cambiar con `--days N` o usar una fecha absoluta con `--since YYYY-MM-DD`.
 
 La previsualizacion imprime filas agregadas por dia/modelo, requests,
 `input_tokens`, `cached_input_tokens`, `output_tokens`, `reasoning_tokens`,
-`total_tokens` y los modelos principales. Si el usuario no confirma, no se sube
-nada.
+`total_tokens`, modelos principales y una serie de uso por dia. Si el usuario
+no confirma, no se sube nada.
 
 ## Build local
 

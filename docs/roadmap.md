@@ -1,188 +1,200 @@
 # Roadmap
 
-## Phase 0: Discovery And Documentation
+Este roadmap refleja el estado actual del producto al 5 de mayo de 2026. El
+proyecto ya no es un tracker genérico de tokens: es un flujo de reporte para que
+Silver reciba señales comparables de uso de IA de candidatos y comunidad, sin
+pedir prompts, respuestas, código fuente, logs crudos ni API keys.
 
-Status: complete.
+## Principios De Producto
 
-- Rename project from Silver Token Ledger to Silver Usage Report.
-- Document findings from the X thread.
-- Document the Deel/performance-review context that triggered the thread.
-- Capture rejected solution categories and why they do not fit.
-- Define privacy boundary.
-- Define normalized usage report schema.
-- Define web, CLI, and manual report contracts.
-- Document why provider org APIs are out of scope for the employee-focused MVP.
+- La web es Spanish-first: toda UI visible para reporteros y admin debe estar en
+  español.
+- El diseño web debe sentirse nativo de Open Silver y tomar como referencia
+  `https://open.silver.dev/`.
+- El primer caso de uso es individual/self-report, no importación company-wide
+  con claves admin.
+- Cada envío debe mostrar preview antes de subir datos.
+- Los reportes deben ser agregados, borrables y vinculables a candidatos o
+  campañas de Silver.
+- El collector debe funcionar como one-shot: corre, muestra preview, confirma y
+  termina.
 
-## Phase 1: Report Session Skeleton
+## Fase 0: Descubrimiento Y Contrato
 
-Status: current.
+Estado: completo.
 
-Outcome: users can create a report session and submit sample report data.
+Resultado: el problema quedó definido como "usage reporting" para Silver, no como
+dashboard personal ni observabilidad permanente.
 
-- Add Dockerfile and docker-compose. In progress: initial files added.
-- Add FastAPI app with Jinja2 + HTMX. In progress: health route and start page added.
-- Add PostgreSQL, SQLAlchemy, and Alembic. In progress: SQLAlchemy models and initial Alembic migration added; SQLite is the local default and Docker uses PostgreSQL.
-- Add usage report route under Open Silver.
-- Create report session API. In progress: create, preview, submit, and delete endpoints added with in-memory storage.
-- Create short code/private-link report sessions without required reporter login. In progress: in-memory service added for first slice.
-- Create sample usage report payload.
-- Render report preview. In progress: API preview summary and first manual-entry web surface added.
-- Add confidence/source labels.
-- Add confirmation flow.
-- Add delete flow.
-- Add minimal Silver admin/review view.
-- Add minimal Silver admin/review view. In progress: `/admin/reports` lists sessions, status, row counts, and token totals.
+- Proyecto renombrado a Silver Usage Report.
+- Contexto del thread de X y del problema de performance/review documentado.
+- Privacidad, trust model y límites de datos sensibles documentados.
+- Esquema normalizado de reporte definido con Pydantic.
+- APIs provider/org/admin explícitamente fuera del MVP individual.
 
-## Phase 2: Manual, CSV, And JSON Fallback
+## Fase 1: Sesiones De Reporte Web
 
-Outcome: every user has at least one path to submit a report.
+Estado: completo.
 
-- Create CSV template.
-- Create JSON schema. In progress: Pydantic report rows and payloads are shared by API, CLI, and MCP helpers.
-- Create manual entry form. In progress: web manual, CSV, and JSON preview flows added.
-- Validate report payloads. In progress: token/date validation, sensitive-field rejection, and derived totals added.
-- Label manual data as lower confidence. In progress: manual rows are capped to low confidence.
-- Add duplicate period warnings.
-- Add synthetic fixture reports.
+Resultado: un usuario puede crear una sesión, cargar datos, previsualizar,
+confirmar, verificar estado con link privado y borrar datos agregados.
 
-## Phase 3: CLI Importer Skeleton
+- Dockerfile y Docker Compose.
+- FastAPI + Jinja2 + HTMX.
+- PostgreSQL en Docker, SQLite local para desarrollo/tests.
+- Modelos SQLAlchemy y migración inicial.
+- Creación de sesiones de reporte.
+- Preview y submit por API.
+- Link privado de gestión para el reportero.
+- Estado de sesión, totales, filas y warnings visibles para el usuario.
+- Delete flow para datos agregados.
+- UI web en español.
+- Visual integrado con Open Silver.
 
-Outcome: users can run a local command and upload fixture or local aggregate data.
+## Fase 2: Fallback Universal Manual/CSV/JSON
 
-- Create `silver-usage-report` CLI package.
-- Implement session pairing.
-- Implement local preview. In progress: JSON and CSV preview commands added.
-- Implement aggregate upload. In progress: JSON submit command posts preview then submit after `--yes`.
-- Add schema validation.
-- Add test fixtures.
-- Ensure no raw logs are uploaded.
+Estado: completo.
 
-## Phase 4: MCP / Agent-Assisted Import
+Resultado: nadie queda bloqueado por no tener collector o por usar una herramienta
+sin parser automático.
 
-Outcome: users can ask a local agent to inspect supported local usage sources and submit a structured report.
+- Form manual.
+- Preview CSV.
+- Preview JSON.
+- Validación de fechas, tokens, confianza y campos sensibles.
+- Cálculo derivado de `total_tokens`.
+- Filas manuales degradadas a baja confianza.
+- Fixtures sintéticos y cobertura de importación.
 
-- MCP server with strict `preview_report` and `submit_report` schemas. In progress: dependency-free helper functions added before binding to a concrete MCP transport.
-- Prompt template for Codex, Claude Code, and Cursor-oriented workflows. In progress: first agent-assisted import prompt added.
-- Sensitive-field rejection.
-- Evidence metadata for local telemetry/stat sources.
-- Preview-before-submit flow.
-- Confidence labels calculated by source type.
-- Codex prompt template using the local telemetry recipe.
+## Fase 3: CLI Y Collector Standalone
 
-## Phase 5: Local Tools
+Estado: completo, con polish continuo.
 
-Outcome: users without admin provider keys can still report useful usage.
+Resultado: un candidato puede correr un comando local o un binario standalone,
+ver el resumen y enviar el reporte sin instalar Python.
 
-- Local log parser interface.
-- Codex local history usage investigation.
-- Codex local telemetry proof-of-concept using `logs_2.sqlite` and `post sampling token usage` rows. In progress: fixture-backed adapter added.
-- Separate Codex auto-review/internal approval tokens from normal work tokens. In progress: internal/approval-like events are excluded with a warning.
-- Claude Code parser investigation.
-- Codex parser investigation. In progress: CLI and MCP preview/submit helpers require explicit SQLite path.
-- Cursor export/local telemetry investigation.
-- Redaction tests.
+- CLI `silver-usage-collector`.
+- Comandos `preview`, `preview-csv`, `submit`.
+- Comandos `preview-codex` y `submit-codex`.
+- `--yes` para flujos no interactivos y confirmación interactiva por defecto.
+- Identificación HTTP con `User-Agent` propio.
+- Manejo explícito de errores HTTP, red caída y respuestas no JSON.
+- Build con PyInstaller.
+- Workflow de release multi-OS para binarios.
+- Documentación de uso en `docs/collector.md`.
 
-## Phase 6: MVP Tool Polish
+## Fase 4: Importación Asistida Por MCP/Agente
 
-Outcome: the three MVP tools have usable report paths and clear fallback behavior.
+Estado: parcial.
 
-- Codex adapter hardening.
-- Claude Code adapter or guided manual fallback.
-- Cursor adapter or guided manual fallback.
-- Cross-tool preview polish.
-- Source/confidence messaging.
+Resultado actual: existen helpers y contrato de flujo para agentes locales, pero
+falta empaquetarlo como MCP instalable/end-to-end.
 
-## Phase 7: Sharing And Campaigns
+Hecho:
 
-Outcome: Silver can use reports as part of open calls, benchmarks, or campaigns.
+- Helpers `preview_report`, `submit_report`, `preview_codex_local`,
+  `submit_codex_local`.
+- Prompt template para importación asistida.
+- Preview-before-submit.
+- Envío a API usando el mismo contrato normalizado.
 
-- Campaign-specific report links.
-- Anonymous benchmark mode.
-- Shareable usage cards.
-- Public examples with synthetic data.
-- Contributor guide for new provider/tool adapters.
-- Responsible framing guidelines so usage reports are not presented as direct productivity scores.
+Pendiente:
 
-## Implementation Paths
+- Servidor MCP real con transporte/manifest instalable.
+- Instrucciones finales para Codex, Claude Code y Cursor.
+- Soporte primario del MCP para `~/.codex/sessions`, no solo SQLite legacy.
+- Smoke test end-to-end desde un cliente MCP real.
 
-There are several viable paths, but they are not equally good for the first move.
+## Fase 5: Fuentes Locales De Herramientas
 
-### Path A: Web Report First
+Estado: Codex avanzado; resto pendiente.
 
-Build the report session, manual/CSV import, preview, confirmation, and admin review before local automation.
+Resultado actual: Codex tiene adapter útil sobre session rollouts; Cursor y
+Claude Code todavía dependen de fallback manual/CSV/JSON.
 
-Pros:
+Hecho para Codex:
 
-- Fastest path to a working product.
-- Validates the real Silver workflow.
-- Works for everyone on day one.
-- Avoids provider/admin-key dead ends for employees.
+- Fuente primaria: `~/.codex/sessions`.
+- Fallback legacy: `state_5.sqlite` y `logs_2.sqlite`.
+- Agregado por día/modelo.
+- Default últimos 30 días con `--days` y `--since`.
+- Breakdown de requests, input, cached input, output, reasoning, total y top
+  models.
+- Warnings para datos best-effort.
 
-Cons:
+Pendiente:
 
-- Some reports are manual or low-confidence at first.
-- Less magical than automatic provider import.
+- Detección/documentación de múltiples instalaciones Codex.
+- Soporte para rutas múltiples de sesiones.
+- Investigación e implementación de Claude Code.
+- Investigación e implementación de Cursor.
+- Mensajes UX más claros cuando una fuente local no existe o no tiene datos.
 
-### Path B: CLI Importer First
+## Fase 6: Admin Y Vinculación Silver
 
-Build the local one-shot importer before the web flow.
+Estado: primer corte completo; hardening pendiente.
 
-Pros:
+Resultado actual: Silver puede revisar reportes y vincularlos con candidatos o
+campañas.
 
-- Strong privacy story.
-- Good foundation for local tool telemetry and pasted/exported stats.
-- Matches the "paste this in your terminal" idea.
+Hecho:
 
-Cons:
+- `/admin/reports`.
+- Detalle admin por sesión.
+- Campos `reporter_label`, `reporter_email`, `github_handle`, `x_handle`,
+  `candidate_ref`, `campaign_ref`.
+- Token admin configurable por `ADMIN_TOKEN`.
+- Totales, estado, filas y warnings visibles en admin.
 
-- Still asks users to run software.
-- Harder to show value without the web report session.
-- Can drift back into tracker-tool territory.
+Pendiente:
 
-### Path C: Provider APIs First
+- Filtros/búsqueda por campaña, candidato, email o handle.
+- Export CSV desde admin.
+- Mejor separación de permisos entre admin y reportero.
+- Auditoría de delete/status para evitar endpoints demasiado permisivos en
+  producción.
 
-Start with Anthropic and OpenAI usage/cost APIs.
+## Fase 7: Deploy, QA Y Confianza Operativa
 
-Pros:
+Estado: en curso.
 
-- High-confidence data.
-- Strong demo for users with admin/org access.
+Resultado buscado: Gabriel puede revisar el producto con confianza de senior:
+instalación reproducible, tests verdes, smoke real y documentación que no miente.
 
-Cons:
+Pendiente inmediato:
 
-- Excludes many users.
-- Admin keys and account permissions create friction.
-- Does not solve Cursor/Claude Code/Codex users immediately.
-- Misreads org/admin APIs as universal "connect account" flows.
-- Out of current scope because we are not building company/admin mode.
+- Smoke local con Docker.
+- Smoke remoto en `silver-usage-dev.fulanito3d.com.ar`.
+- Checklist de deploy.
+- Documentar variables de entorno de producción.
+- Validar links de descarga del collector en entorno deployado.
+- Revisar copy de errores de usuario final.
+- Revisar seguridad de endpoints de gestión.
 
-### Path D: Full Tracker
+## Fase 8: Sharing Y Campañas
 
-Build an ongoing tracker/dashboard.
+Estado: futuro.
 
-Pros:
+- Links por campaña.
+- Modo benchmark anónimo.
+- Cards/shareables con reportes sintéticos.
+- Ejemplos públicos.
+- Guía de contribución para nuevos adapters.
+- Framing responsable: el uso de tokens es señal técnica contextual, no score
+  directo de productividad.
 
-- Useful long-term.
-- Can become a personal analytics product.
+## Ruta Recomendada
 
-Cons:
+El orden actual sigue siendo:
 
-- Misaligned with the thread's constraints.
-- Requires installation or instrumentation.
-- Delays useful data collection.
+1. Web report session.
+2. Fallback manual/CSV/JSON.
+3. Collector one-shot.
+4. Codex local adapter.
+5. MCP instalable.
+6. Claude Code y Cursor.
+7. Admin hardening y campañas.
 
-## Recommended Path
-
-Start with Path A, then add MCP-assisted import and the CLI skeleton.
-
-The first implementation should prove the report workflow:
-
-1. Create a report session.
-2. Accept sample/manual/CSV data.
-3. Preview normalized rows.
-4. Confirmar envio.
-5. Let Silver review the report.
-
-After that, add the CLI importer and local source adapters to improve automation and confidence.
-
-Provider org/admin APIs remain out of scope until Silver explicitly decides to support company/admin reports.
+La decisión de no arrancar por APIs provider/org/admin sigue vigente: son útiles
+para compañías, pero no resuelven bien el caso de un candidato individual que no
+tiene permisos de admin.

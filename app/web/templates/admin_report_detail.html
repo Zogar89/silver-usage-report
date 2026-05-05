@@ -75,6 +75,46 @@
 
   <section class="panel table-wrap">
     <div class="panel-heading">
+      <p class="eyebrow">Serie diaria</p>
+      <h2>Uso por dia</h2>
+    </div>
+    {% if summary.daily_usage %}
+      <table class="dense-table compact-table">
+        <thead>
+          <tr>
+            <th>Dia</th>
+            <th>Requests</th>
+            <th>Tokens</th>
+            <th>Input</th>
+            <th>Output</th>
+            <th>Cache</th>
+            <th>Razonamiento</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for day in summary.daily_usage %}
+            <tr>
+              <td>{{ day.day }}</td>
+              <td>{{ day.request_count }}</td>
+              <td>{{ day.total_tokens }}</td>
+              <td>{{ day.input_tokens }}</td>
+              <td>{{ day.output_tokens }}</td>
+              <td>{{ day.cached_input_tokens }}</td>
+              <td>{{ day.reasoning_tokens }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="empty-state">
+        <h2>Sin serie diaria</h2>
+        <p>Cuando haya filas de uso, Silver vera el consumo agregado por dia.</p>
+      </div>
+    {% endif %}
+  </section>
+
+  <section class="panel table-wrap">
+    <div class="panel-heading">
       <p class="eyebrow">Datos</p>
       <h2>Senales recolectadas</h2>
     </div>

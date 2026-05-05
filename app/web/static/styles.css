@@ -378,6 +378,10 @@ h3 {
   min-width: 980px;
 }
 
+.compact-table {
+  min-width: 760px;
+}
+
 @media (max-width: 760px) {
   .site-header,
   nav {

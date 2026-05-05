@@ -175,6 +175,41 @@ def test_mcp_post_json_identifies_itself_to_http_proxies():
     assert captured["timeout"] == 30
 
 
+def test_mcp_post_json_reports_network_errors():
+    with patch("mcp_server.main.request.urlopen", side_effect=mcp_main.error.URLError("connection refused")):
+        try:
+            mcp_main._post_json("https://example.test/api", {"method": "POST", "json": {"rows": []}})
+        except RuntimeError as exc:
+            message = str(exc)
+        else:
+            raise AssertionError("Expected RuntimeError")
+
+    assert "Silver API request failed: could not reach https://example.test/api" in message
+    assert "connection refused" in message
+
+
+def test_mcp_get_json_reports_invalid_json_response():
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def read(self) -> bytes:
+            return b"<html>proxy login</html>"
+
+    with patch("mcp_server.main.request.urlopen", return_value=FakeResponse()):
+        try:
+            mcp_main._get_json("https://example.test/api")
+        except RuntimeError as exc:
+            message = str(exc)
+        else:
+            raise AssertionError("Expected RuntimeError")
+
+    assert "Silver API request failed: invalid JSON response from https://example.test/api" in message
+
+
 def _write_codex_usage_row(connection: sqlite3.Connection) -> None:
     connection.execute(
         "create table logs (target text not null, timestamp text not null, feedback_log_body text not null)"

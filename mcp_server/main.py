@@ -131,18 +131,31 @@ def _post_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
     )
     try:
         with request.urlopen(http_request, timeout=30) as response:
-            return json.loads(response.read().decode("utf-8"))
+            return _decode_json_response(url, response.read().decode("utf-8"))
     except error.HTTPError as exc:
         raise RuntimeError(_format_http_error(url, exc)) from exc
+    except error.URLError as exc:
+        raise RuntimeError(f"Silver API request failed: could not reach {url}: {exc.reason}") from exc
 
 
 def _get_json(url: str) -> dict[str, Any]:
     http_request = request.Request(url, method="GET", headers=HTTP_HEADERS)
     try:
         with request.urlopen(http_request, timeout=30) as response:
-            return json.loads(response.read().decode("utf-8"))
+            return _decode_json_response(url, response.read().decode("utf-8"))
     except error.HTTPError as exc:
         raise RuntimeError(_format_http_error(url, exc)) from exc
+    except error.URLError as exc:
+        raise RuntimeError(f"Silver API request failed: could not reach {url}: {exc.reason}") from exc
+
+
+def _decode_json_response(url: str, response_body: str) -> dict[str, Any]:
+    if not response_body:
+        return {}
+    try:
+        return json.loads(response_body)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Silver API request failed: invalid JSON response from {url}: {response_body}") from exc
 
 
 def _format_http_error(url: str, exc: error.HTTPError) -> str:

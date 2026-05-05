@@ -352,6 +352,9 @@ def test_cli_preview_codex_defaults_to_last_30_days_and_prints_usage_breakdown(c
         assert "Total tokens: 185" in output
         assert "Top models:" in output
         assert "- gpt-5.5: 185 tokens, 1 requests" in output
+        assert "Uso por dia:" in output
+        assert "- 2026-" in output
+        assert "185 tokens, 1 requests, in 100, out 50" in output
     finally:
         recent_path.unlink(missing_ok=True)
         old_path.unlink(missing_ok=True)
@@ -449,6 +452,33 @@ def test_cli_post_json_identifies_itself_to_http_proxies():
     assert captured["user_agent"] == "silver-usage-report-cli/0.1"
     assert captured["accept"] == "application/json"
     assert captured["timeout"] == 30
+
+
+def test_cli_post_json_reports_network_errors():
+    with patch("cli.main.request.urlopen", side_effect=cli_main.error.URLError("connection refused")):
+        with pytest.raises(SystemExit) as exc:
+            cli_main._post_json("https://example.test/api", {"method": "POST", "json": {"rows": []}})
+
+    assert "Silver API request failed: could not reach https://example.test/api" in str(exc.value)
+    assert "connection refused" in str(exc.value)
+
+
+def test_cli_post_json_reports_invalid_json_response():
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def read(self) -> bytes:
+            return b"<html>proxy login</html>"
+
+    with patch("cli.main.request.urlopen", return_value=FakeResponse()):
+        with pytest.raises(SystemExit) as exc:
+            cli_main._post_json("https://example.test/api", {"method": "POST", "json": {"rows": []}})
+
+    assert "Silver API request failed: invalid JSON response from https://example.test/api" in str(exc.value)
 
 
 def _write_codex_usage_row(connection: sqlite3.Connection) -> None:
