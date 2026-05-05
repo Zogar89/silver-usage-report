@@ -158,6 +158,7 @@ Initial API endpoints:
 
 ```text
 POST   /api/usage-report/sessions
+GET    /api/usage-report/sessions/{session_id}
 POST   /api/usage-report/sessions/{session_id}/preview
 POST   /api/usage-report/sessions/{session_id}/preview/csv
 POST   /api/usage-report/sessions/{session_id}/submit
@@ -169,6 +170,20 @@ Preview a local JSON report file:
 ```bash
 python -m cli.main preview report.json
 ```
+
+Preview a local CSV report file:
+
+```bash
+python -m cli.main preview-csv report.csv
+```
+
+Submit a local JSON report after explicit confirmation:
+
+```bash
+python -m cli.main submit --session SESSION_ID --file report.json --base-url http://localhost:8002 --yes
+```
+
+Agent-assisted imports should use the prompt template at `mcp_server/prompts/agent-assisted-import.md`.
 
 ## Candidate CLI Flow
 

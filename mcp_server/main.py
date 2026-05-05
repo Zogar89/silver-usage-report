@@ -1,4 +1,7 @@
+import json
+from datetime import UTC, datetime
 from typing import Any
+from urllib import request
 
 from app.services.imports import parse_json_rows
 
@@ -12,16 +15,64 @@ def preview_report(payload: Any) -> dict[str, object]:
     }
 
 
-def submit_report(payload: Any) -> dict[str, object]:
+def submit_report(
+    report_session_id: str,
+    payload: Any,
+    base_url: str = "http://localhost:8000",
+    confirmed: bool = False,
+) -> dict[str, object]:
     preview = preview_report(payload)
+    if not confirmed:
+        return {
+            **preview,
+            "status": "confirmation_required",
+        }
+
+    rows = parse_json_rows(payload)
+    rows_json = [row.model_dump(mode="json") for row in rows]
+    preview_url = f"{base_url.rstrip('/')}/api/usage-report/sessions/{report_session_id}/preview"
+    submit_url = f"{base_url.rstrip('/')}/api/usage-report/sessions/{report_session_id}/submit"
+    _post_json(preview_url, {"method": "POST", "json": {"rows": rows_json, "warnings": []}})
+
+    confirmed_at = datetime.now(UTC).isoformat()
+    submit_payload = {
+        "report_session_id": report_session_id,
+        "generated_at": confirmed_at,
+        "rows": rows_json,
+        "warnings": [],
+        "user_confirmation": {
+            "preview_shown": True,
+            "confirmed_at": confirmed_at,
+        },
+    }
+    _post_json(submit_url, {"method": "POST", "json": submit_payload})
     return {
         **preview,
-        "status": "ready_for_api_submit",
+        "status": "submitted",
     }
 
 
-def get_report_status(report_session_id: str) -> dict[str, str]:
-    return {
-        "report_session_id": report_session_id,
-        "status": "not_connected",
-    }
+def get_report_status(
+    report_session_id: str,
+    base_url: str = "http://localhost:8000",
+) -> dict[str, object]:
+    status_url = f"{base_url.rstrip('/')}/api/usage-report/sessions/{report_session_id}"
+    return _get_json(status_url)
+
+
+def _post_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
+    body = json.dumps(payload["json"]).encode("utf-8")
+    http_request = request.Request(
+        url,
+        data=body,
+        method=payload.get("method", "POST"),
+        headers={"content-type": "application/json"},
+    )
+    with request.urlopen(http_request, timeout=30) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _get_json(url: str) -> dict[str, Any]:
+    http_request = request.Request(url, method="GET")
+    with request.urlopen(http_request, timeout=30) as response:
+        return json.loads(response.read().decode("utf-8"))

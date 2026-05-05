@@ -39,6 +39,24 @@ def create_usage_report_session(
     return create_report_session(db, reporter_label=payload.reporter_label)
 
 
+@router.get("/sessions/{session_id}", response_model=ReportSessionSummary)
+def get_usage_report_session(
+    session_id: str,
+    db: Session = Depends(get_db),
+) -> ReportSessionSummary:
+    session = _get_session_or_404(db, session_id)
+    return ReportSessionSummary(
+        id=session.id,
+        public_code=session.public_code,
+        status=session.status,
+        row_count=len(session.rows),
+        total_tokens=sum(row.total_tokens or 0 for row in session.rows),
+        rows=session.rows,
+        warnings=session.warnings,
+        submitted_at=session.submitted_at,
+    )
+
+
 @router.post("/sessions/{session_id}/preview", response_model=ReportSessionSummary)
 def preview_usage_report_session(
     session_id: str,

@@ -1,6 +1,23 @@
 from fastapi.testclient import TestClient
 
+from app.core.config import get_settings
 from app.main import app
+
+
+def test_admin_review_requires_token_when_configured():
+    settings = get_settings()
+    original_token = settings.admin_token
+    settings.admin_token = "test-admin-token"
+    try:
+        client = TestClient(app)
+
+        denied = client.get("/admin/reports")
+        allowed = client.get("/admin/reports", headers={"x-admin-token": "test-admin-token"})
+
+        assert denied.status_code == 401
+        assert allowed.status_code == 200
+    finally:
+        settings.admin_token = original_token
 
 
 def test_admin_review_lists_submitted_report_totals():

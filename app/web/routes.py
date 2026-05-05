@@ -1,11 +1,12 @@
 from datetime import UTC, datetime
 from urllib.parse import parse_qs
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.schemas.usage_report import ReportWarning, UsageReportPayload, UsageReportRow
 from app.services.report_sessions import (
@@ -99,13 +100,21 @@ def delete_manual_report_session(
 def admin_reports(
     request: Request,
     db: Session = Depends(get_db),
+    x_admin_token: str | None = Header(default=None),
 ) -> HTMLResponse:
+    _require_admin_token(x_admin_token)
     reports = list_report_sessions(db)
     return templates.TemplateResponse(
         request,
         "admin_reports.html",
         {"title": "Admin review", "reports": reports},
     )
+
+
+def _require_admin_token(x_admin_token: str | None) -> None:
+    admin_token = get_settings().admin_token
+    if admin_token and x_admin_token != admin_token:
+        raise HTTPException(status_code=401, detail="admin token required")
 
 
 def _render_session(

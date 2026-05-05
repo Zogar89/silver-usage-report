@@ -51,8 +51,8 @@ Outcome: users can run a local command and upload fixture or local aggregate dat
 
 - Create `silver-usage-report` CLI package.
 - Implement session pairing.
-- Implement local preview. In progress: `python -m cli.main preview report.json`.
-- Implement aggregate upload.
+- Implement local preview. In progress: JSON and CSV preview commands added.
+- Implement aggregate upload. In progress: JSON submit command posts preview then submit after `--yes`.
 - Add schema validation.
 - Add test fixtures.
 - Ensure no raw logs are uploaded.
@@ -62,7 +62,7 @@ Outcome: users can run a local command and upload fixture or local aggregate dat
 Outcome: users can ask a local agent to inspect supported local usage sources and submit a structured report.
 
 - MCP server with strict `preview_report` and `submit_report` schemas. In progress: dependency-free helper functions added before binding to a concrete MCP transport.
-- Prompt template for Codex, Claude Code, and Cursor-oriented workflows.
+- Prompt template for Codex, Claude Code, and Cursor-oriented workflows. In progress: first agent-assisted import prompt added.
 - Sensitive-field rejection.
 - Evidence metadata for local telemetry/stat sources.
 - Preview-before-submit flow.

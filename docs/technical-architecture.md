@@ -217,6 +217,14 @@ The CLI should:
 - Submit only after confirmation.
 - Never run as a daemon.
 
+Current commands:
+
+```bash
+python -m cli.main preview report.json
+python -m cli.main preview-csv report.csv
+python -m cli.main submit --session SESSION_ID --file report.json --base-url http://localhost:8002 --yes
+```
+
 ## MCP Server
 
 Python MCP server:
@@ -228,6 +236,10 @@ silver_usage_report.get_report_status
 ```
 
 The MCP server should reuse the same schemas and validation logic as the web API.
+
+The initial implementation exposes these as transport-agnostic helpers in
+`mcp_server/main.py` and pairs them with the agent prompt at
+`mcp_server/prompts/agent-assisted-import.md`.
 
 ## Docker
 

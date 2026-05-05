@@ -39,6 +39,20 @@ def test_create_report_session_api_returns_session_details():
     assert data["status"] == "draft"
 
 
+def test_get_report_session_api_returns_private_session_summary_without_token():
+    client = TestClient(app)
+    session = _create_session(client)
+
+    response = client.get(f"/api/usage-report/sessions/{session['id']}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == session["id"]
+    assert data["public_code"] == session["public_code"]
+    assert data["status"] == "draft"
+    assert "private_token" not in data
+
+
 def test_preview_report_rows_updates_session_status_and_totals():
     client = TestClient(app)
     session = _create_session(client)

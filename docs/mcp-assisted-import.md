@@ -1,5 +1,28 @@
 # MCP-Assisted Import
 
+Status: initial helper contract added.
+
+The repository now includes:
+
+- `mcp_server/main.py`: dependency-free helper functions for `preview_report`, `submit_report`, and `get_report_status`.
+- `mcp_server/prompts/agent-assisted-import.md`: the first prompt template for Codex, Claude Code, Cursor, or another local agent.
+- Shared validation through `app.schemas.usage_report`.
+
+The current helper layer is intentionally transport-agnostic. The next step is
+to bind these functions to a concrete Python MCP server package once the
+deployment target and MCP runtime are chosen.
+
+The required user flow remains:
+
+1. Inspect only local aggregate usage sources.
+2. Produce normalized rows.
+3. Show preview before submit.
+4. Ask for explicit confirmation.
+5. Submit only aggregate rows.
+
+The helper layer must reject or avoid prompts, responses, source code, raw logs,
+API keys, environment variables, and full local paths.
+
 MCP-assisted import is the main automation idea for the employee-focused product.
 
 It matches the thread's direction:
