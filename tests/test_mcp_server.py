@@ -4,7 +4,13 @@ import json
 import sqlite3
 from pathlib import Path
 
-from mcp_server.main import get_report_status, preview_codex_local, preview_report, submit_report
+from mcp_server.main import (
+    get_report_status,
+    preview_codex_local,
+    preview_report,
+    submit_codex_local,
+    submit_report,
+)
 
 
 def test_mcp_preview_report_returns_totals_without_sensitive_data():
@@ -111,3 +117,51 @@ def test_mcp_preview_codex_local_uses_explicit_logs_db():
     finally:
         connection.close()
         db_path.unlink(missing_ok=True)
+
+
+def test_mcp_submit_codex_local_posts_preview_and_submit():
+    db_path = Path(".tmp_mcp_codex_submit.sqlite")
+    calls: list[tuple[str, str, dict]] = []
+    connection = sqlite3.connect(db_path)
+    try:
+        _write_codex_usage_row(connection)
+
+        def fake_post(url: str, payload: dict) -> dict:
+            calls.append((url, payload["method"], payload["json"]))
+            return {"status": "ok"}
+
+        with patch("mcp_server.main._post_json", side_effect=fake_post):
+            result = submit_codex_local(
+                "session_123",
+                str(db_path),
+                base_url="http://localhost:8000",
+                confirmed=True,
+            )
+
+        assert result["status"] == "submitted"
+        assert calls[0][2]["rows"][0]["source"] == "codex_local_telemetry"
+        assert calls[1][0].endswith("/api/usage-report/sessions/session_123/submit")
+    finally:
+        connection.close()
+        db_path.unlink(missing_ok=True)
+
+
+def _write_codex_usage_row(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        "create table logs (target text not null, timestamp text not null, feedback_log_body text not null)"
+    )
+    connection.execute(
+        "insert into logs (target, timestamp, feedback_log_body) values (?, ?, ?)",
+        (
+            "codex_core::session::turn",
+            "2026-05-01T10:00:00Z",
+            json.dumps(
+                {
+                    "message": "post sampling token usage",
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                }
+            ),
+        ),
+    )
+    connection.commit()

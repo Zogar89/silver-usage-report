@@ -186,3 +186,85 @@ def test_cli_preview_codex_reads_explicit_logs_db(capsys):
     finally:
         connection.close()
         db_path.unlink(missing_ok=True)
+
+
+def test_cli_submit_codex_requires_yes_confirmation(capsys):
+    db_path = Path(".tmp_cli_codex_submit_requires.sqlite")
+    connection = sqlite3.connect(db_path)
+    try:
+        _write_codex_usage_row(connection)
+
+        exit_code = main(
+            [
+                "submit-codex",
+                "--session",
+                "session_123",
+                "--logs-db",
+                str(db_path),
+                "--base-url",
+                "http://localhost:8000",
+            ]
+        )
+
+        assert exit_code == 2
+        assert "Refusing to submit without --yes" in capsys.readouterr().out
+    finally:
+        connection.close()
+        db_path.unlink(missing_ok=True)
+
+
+def test_cli_submit_codex_previews_then_posts_report(capsys):
+    db_path = Path(".tmp_cli_codex_submit.sqlite")
+    calls: list[tuple[str, str, dict]] = []
+    connection = sqlite3.connect(db_path)
+    try:
+        _write_codex_usage_row(connection)
+
+        def fake_post(url: str, payload: dict) -> dict:
+            calls.append((url, payload["method"], payload["json"]))
+            return {"status": "ok"}
+
+        with patch("cli.main._post_json", side_effect=fake_post):
+            exit_code = main(
+                [
+                    "submit-codex",
+                    "--session",
+                    "session_123",
+                    "--logs-db",
+                    str(db_path),
+                    "--base-url",
+                    "http://localhost:8000",
+                    "--yes",
+                ]
+            )
+
+        assert exit_code == 0
+        assert calls[0][0].endswith("/api/usage-report/sessions/session_123/preview")
+        assert calls[0][2]["rows"][0]["source"] == "codex_local_telemetry"
+        assert calls[1][0].endswith("/api/usage-report/sessions/session_123/submit")
+        assert "Submitted Codex local telemetry for session session_123" in capsys.readouterr().out
+    finally:
+        connection.close()
+        db_path.unlink(missing_ok=True)
+
+
+def _write_codex_usage_row(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        "create table logs (target text not null, timestamp text not null, feedback_log_body text not null)"
+    )
+    connection.execute(
+        "insert into logs (target, timestamp, feedback_log_body) values (?, ?, ?)",
+        (
+            "codex_core::session::turn",
+            "2026-05-01T10:00:00Z",
+            json.dumps(
+                {
+                    "message": "post sampling token usage",
+                    "model": "gpt-5.5",
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                }
+            ),
+        ),
+    )
+    connection.commit()

@@ -224,6 +224,7 @@ python -m cli.main preview report.json
 python -m cli.main preview-csv report.csv
 python -m cli.main preview-codex --logs-db "C:\Users\YOU\.codex\logs_2.sqlite"
 python -m cli.main submit --session SESSION_ID --file report.json --base-url http://localhost:8002 --yes
+python -m cli.main submit-codex --session SESSION_ID --logs-db "C:\Users\YOU\.codex\logs_2.sqlite" --base-url http://localhost:8002 --yes
 ```
 
 ## MCP Server

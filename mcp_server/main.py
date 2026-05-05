@@ -64,6 +64,49 @@ def submit_report(
     }
 
 
+def submit_codex_local(
+    report_session_id: str,
+    logs_db_path: str,
+    base_url: str = "http://localhost:8000",
+    confirmed: bool = False,
+) -> dict[str, object]:
+    rows, warnings = preview_codex_local_usage(Path(logs_db_path))
+    preview = {
+        "row_count": len(rows),
+        "total_tokens": sum(row.total_tokens or 0 for row in rows),
+        "source": "codex_local_telemetry",
+        "warnings": [warning.model_dump(mode="json") for warning in warnings],
+    }
+    if not confirmed:
+        return {
+            **preview,
+            "status": "confirmation_required",
+        }
+
+    rows_json = [row.model_dump(mode="json") for row in rows]
+    warnings_json = [warning.model_dump(mode="json") for warning in warnings]
+    preview_url = f"{base_url.rstrip('/')}/api/usage-report/sessions/{report_session_id}/preview"
+    submit_url = f"{base_url.rstrip('/')}/api/usage-report/sessions/{report_session_id}/submit"
+    _post_json(preview_url, {"method": "POST", "json": {"rows": rows_json, "warnings": warnings_json}})
+
+    confirmed_at = datetime.now(UTC).isoformat()
+    submit_payload = {
+        "report_session_id": report_session_id,
+        "generated_at": confirmed_at,
+        "rows": rows_json,
+        "warnings": warnings_json,
+        "user_confirmation": {
+            "preview_shown": True,
+            "confirmed_at": confirmed_at,
+        },
+    }
+    _post_json(submit_url, {"method": "POST", "json": submit_payload})
+    return {
+        **preview,
+        "status": "submitted",
+    }
+
+
 def get_report_status(
     report_session_id: str,
     base_url: str = "http://localhost:8000",

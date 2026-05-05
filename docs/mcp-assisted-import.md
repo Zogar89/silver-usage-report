@@ -35,6 +35,12 @@ CLI preview:
 python -m cli.main preview-codex --logs-db "C:\Users\YOU\.codex\logs_2.sqlite"
 ```
 
+CLI submit:
+
+```bash
+python -m cli.main submit-codex --session SESSION_ID --logs-db "C:\Users\YOU\.codex\logs_2.sqlite" --base-url http://localhost:8002 --yes
+```
+
 The adapter currently queries only rows that match:
 
 - `target = "codex_core::session::turn"`
@@ -43,6 +49,11 @@ The adapter currently queries only rows that match:
 It ignores non-usage rows and excludes events that look like internal approval or
 auto-review usage. It emits `source: "codex_local_telemetry"` and confidence
 `medium`, because local telemetry is useful but not official provider billing.
+
+MCP helpers expose both preview and submit paths:
+
+- `preview_codex_local(logs_db_path)`
+- `submit_codex_local(report_session_id, logs_db_path, base_url, confirmed=True)`
 
 MCP-assisted import is the main automation idea for the employee-focused product.
 

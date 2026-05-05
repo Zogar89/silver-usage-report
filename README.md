@@ -189,6 +189,12 @@ Submit a local JSON report after explicit confirmation:
 python -m cli.main submit --session SESSION_ID --file report.json --base-url http://localhost:8002 --yes
 ```
 
+Submit Codex local telemetry after explicit confirmation:
+
+```bash
+python -m cli.main submit-codex --session SESSION_ID --logs-db "C:\Users\YOU\.codex\logs_2.sqlite" --base-url http://localhost:8002 --yes
+```
+
 Agent-assisted imports should use the prompt template at `mcp_server/prompts/agent-assisted-import.md`.
 
 ## Candidate CLI Flow

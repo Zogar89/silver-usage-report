@@ -31,6 +31,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     submit.add_argument("--base-url", default="http://localhost:8000")
     submit.add_argument("--yes", action="store_true")
 
+    submit_codex = subcommands.add_parser(
+        "submit-codex",
+        help="Preview and submit Codex local telemetry from an explicit logs_2.sqlite path.",
+    )
+    submit_codex.add_argument("--session", required=True)
+    submit_codex.add_argument("--logs-db", required=True, type=Path)
+    submit_codex.add_argument("--base-url", default="http://localhost:8000")
+    submit_codex.add_argument("--yes", action="store_true")
+
     args = parser.parse_args(argv)
     if args.command == "preview":
         return _preview_json(args.file)
@@ -40,6 +49,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _preview_codex(args.logs_db)
     if args.command == "submit":
         return _submit(args.session, args.file, args.base_url, args.yes)
+    if args.command == "submit-codex":
+        return _submit_codex(args.session, args.logs_db, args.base_url, args.yes)
     return 1
 
 
@@ -68,29 +79,39 @@ def _preview_codex(logs_db_path: Path) -> int:
 def _submit(session_id: str, path: Path, base_url: str, yes: bool) -> int:
     data = json.loads(path.read_text(encoding="utf-8"))
     rows = parse_json_rows(data)
+    return _submit_rows(session_id, rows, [], base_url, yes, "report")
+
+
+def _submit_codex(session_id: str, logs_db_path: Path, base_url: str, yes: bool) -> int:
+    rows, warnings = preview_codex_local_usage(logs_db_path)
+    return _submit_rows(session_id, rows, warnings, base_url, yes, "Codex local telemetry")
+
+
+def _submit_rows(session_id: str, rows, warnings, base_url: str, yes: bool, label: str) -> int:
     _print_preview(rows)
     if not yes:
         print("Refusing to submit without --yes")
         return 2
 
     rows_json = [row.model_dump(mode="json") for row in rows]
+    warnings_json = [warning.model_dump(mode="json") for warning in warnings]
     preview_url = f"{base_url.rstrip('/')}/api/usage-report/sessions/{session_id}/preview"
     submit_url = f"{base_url.rstrip('/')}/api/usage-report/sessions/{session_id}/submit"
-    _post_json(preview_url, {"method": "POST", "json": {"rows": rows_json, "warnings": []}})
+    _post_json(preview_url, {"method": "POST", "json": {"rows": rows_json, "warnings": warnings_json}})
 
     confirmed_at = datetime.now(UTC).isoformat()
     payload = {
         "report_session_id": session_id,
         "generated_at": confirmed_at,
         "rows": rows_json,
-        "warnings": [],
+        "warnings": warnings_json,
         "user_confirmation": {
             "preview_shown": True,
             "confirmed_at": confirmed_at,
         },
     }
     _post_json(submit_url, {"method": "POST", "json": payload})
-    print(f"Submitted report for session {session_id}")
+    print(f"Submitted {label} for session {session_id}")
     return 0
 
 
