@@ -158,11 +158,20 @@ def _read_session_usage_events(sessions_dir: Path) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
     for path in sorted(sessions_dir.rglob("rollout-*.jsonl")):
         latest_event: dict[str, Any] | None = None
+        metadata: dict[str, Any] = {}
         for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            if '"model"' in line or '"model_provider"' in line or '"model_context_window"' in line:
+                metadata.update(_parse_session_metadata_line(line))
             parsed = _parse_session_line(line)
             if parsed is not None:
                 latest_event = parsed
         if latest_event is not None:
+            if not latest_event.get("model") and metadata.get("model"):
+                latest_event["model"] = metadata["model"]
+            if not latest_event.get("model_provider") and metadata.get("model_provider"):
+                latest_event["model_provider"] = metadata["model_provider"]
+            if not latest_event.get("model_context_window") and metadata.get("model_context_window"):
+                latest_event["model_context_window"] = metadata["model_context_window"]
             events.append(latest_event)
     row_count = len(events)
     for event in events:
@@ -179,12 +188,15 @@ def _parse_session_line(line: str) -> dict[str, Any] | None:
         return None
 
     usage = parsed.get("usage")
+    info = None
+    rate_limits = parsed.get("rate_limits")
     if not isinstance(usage, dict):
         payload = parsed.get("payload")
         if isinstance(payload, dict) and payload.get("type") == "token_count":
             info = payload.get("info")
             if isinstance(info, dict):
                 usage = info.get("total_token_usage")
+            rate_limits = payload.get("rate_limits")
     if not isinstance(usage, dict):
         return None
     if not _has_token_usage(usage):
@@ -195,6 +207,11 @@ def _parse_session_line(line: str) -> dict[str, Any] | None:
         "_query_fingerprint": "codex_sessions_token_count_total_usage_v1",
         "message": USAGE_MARKER,
         "model": _optional_str(parsed.get("model")),
+        "model_provider": _optional_str(parsed.get("model_provider")),
+        "model_context_window": _optional_int(info.get("model_context_window")) if isinstance(info, dict) else None,
+        "plan_type": _optional_str(rate_limits.get("plan_type")) if isinstance(rate_limits, dict) else None,
+        "rate_limit_primary_used_percent": _nested_float(rate_limits, "primary", "used_percent"),
+        "rate_limit_secondary_used_percent": _nested_float(rate_limits, "secondary", "used_percent"),
         "input_tokens": _usage_int(usage, "input_tokens"),
         "output_tokens": _usage_int(usage, "output_tokens"),
         "cached_input_tokens": _usage_int(usage, "cached_input_tokens"),
@@ -202,6 +219,29 @@ def _parse_session_line(line: str) -> dict[str, Any] | None:
         "reasoning_tokens": _usage_int(usage, "reasoning_tokens", "reasoning_output_tokens"),
         "total_tokens": _usage_total(usage),
     }
+
+
+def _parse_session_metadata_line(line: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(line)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    payload = parsed.get("payload")
+    if not isinstance(payload, dict):
+        return {}
+    metadata: dict[str, Any] = {}
+    model = _optional_str(payload.get("model"))
+    model_provider = _optional_str(payload.get("model_provider"))
+    model_context_window = _optional_int(payload.get("model_context_window"))
+    if model:
+        metadata["model"] = model
+    if model_provider:
+        metadata["model_provider"] = model_provider
+    if model_context_window is not None:
+        metadata["model_context_window"] = model_context_window
+    return metadata
 
 
 def _has_token_usage(usage: dict[str, Any]) -> bool:
@@ -240,6 +280,20 @@ def _usage_total(usage: dict[str, Any]) -> int | None:
     ]
     total = sum(value or 0 for value in values)
     return total if total else None
+
+
+def _nested_float(value: Any, *keys: str) -> float | None:
+    current = value
+    for key in keys:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    if current in (None, ""):
+        return None
+    try:
+        return float(current)
+    except (TypeError, ValueError):
+        return None
 
 
 def _state_db_for(logs_db_path: Path) -> Path | None:
@@ -397,6 +451,10 @@ def _event_to_row(event: dict[str, Any], row_count: int) -> UsageReportRow:
             row_count=_optional_int(event.get("_row_count")) or row_count,
             query_fingerprint=_optional_str(event.get("_query_fingerprint"))
             or "codex_core_session_turn_post_sampling_token_usage_v1",
+            model_context_window=_optional_int(event.get("model_context_window")),
+            plan_type=_optional_str(event.get("plan_type")),
+            rate_limit_primary_used_percent=_nested_float(event, "rate_limit_primary_used_percent"),
+            rate_limit_secondary_used_percent=_nested_float(event, "rate_limit_secondary_used_percent"),
             warnings=[],
         ),
     )

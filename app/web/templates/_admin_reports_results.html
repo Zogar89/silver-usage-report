@@ -1,0 +1,82 @@
+<div class="results-meta">
+  <span>{{ report_page.total | number }} reportes encontrados</span>
+  <span>Pagina {{ report_page.page }} de {{ report_page.page_count }}</span>
+</div>
+
+{% if reports %}
+  <table>
+    <thead>
+      <tr>
+        <th>Codigo</th>
+        <th>Estado</th>
+        <th>Candidato</th>
+        <th>Reportero</th>
+        <th>Tokens totales</th>
+        <th>Costo</th>
+        <th>Actualizado</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for report in reports %}
+      <tr>
+        <td><a href="/admin/reports/{{ report.id }}">{{ report.public_code }}</a></td>
+        <td><span class="status-pill status-{{ report.status }}">{{ report.status | status_label }}</span></td>
+        <td>{{ report.candidate_ref or "Sin informar" }}</td>
+        <td>
+          <strong>{{ report.reporter_label or "Sin nombre" }}</strong>
+          <span class="subtle-line">{{ report.reporter_email or report.github_handle or "Sin contacto" }}</span>
+        </td>
+        <td>{{ report.total_tokens | token_amount }}</td>
+        <td>{{ report.total_cost_usd | usd }}</td>
+        <td>
+          {% if report.submitted_at %}
+            {{ report.submitted_at | datetime_short }}
+            <span class="subtle-line">enviado</span>
+          {% elif report.created_at %}
+            {{ report.created_at | datetime_short }}
+            <span class="subtle-line">creado</span>
+          {% else %}
+            Sin fecha
+          {% endif %}
+        </td>
+        <td>
+          {% if report.status == "deleted" %}
+            <span class="muted">Eliminado</span>
+          {% else %}
+            <div class="table-actions">
+              <a class="button-link secondary small-button" href="/admin/reports/{{ report.id }}">Ver detalle</a>
+              <a class="button-link secondary small-button" href="/admin/reports/{{ report.id }}#candidate-data">Editar</a>
+              <form method="post" action="/admin/reports/{{ report.id }}/delete" class="inline-form">
+                <button class="danger small-button" type="submit" onclick="return confirm('Eliminar los datos del reporte {{ report.public_code }}?')">Borrar</button>
+              </form>
+            </div>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if report_page.page_count > 1 %}
+    <nav class="pagination" aria-label="Paginas de reportes">
+      {% if report_page.page > 1 %}
+        <a class="button-link secondary small-button" href="/admin/reports?q={{ (report_page.query or '') | urlencode }}&page={{ report_page.page - 1 }}&per_page={{ report_page.per_page }}"
+          hx-get="/admin/reports?q={{ (report_page.query or '') | urlencode }}&page={{ report_page.page - 1 }}&per_page={{ report_page.per_page }}"
+          hx-target="#admin-report-results"
+          hx-push-url="true">Anterior</a>
+      {% endif %}
+      {% if report_page.page < report_page.page_count %}
+        <a class="button-link secondary small-button" href="/admin/reports?q={{ (report_page.query or '') | urlencode }}&page={{ report_page.page + 1 }}&per_page={{ report_page.per_page }}"
+          hx-get="/admin/reports?q={{ (report_page.query or '') | urlencode }}&page={{ report_page.page + 1 }}&per_page={{ report_page.per_page }}"
+          hx-target="#admin-report-results"
+          hx-push-url="true">Siguiente</a>
+      {% endif %}
+    </nav>
+  {% endif %}
+{% else %}
+  <div class="empty-state">
+    <h2>No hay reportes para esta busqueda</h2>
+    <p>Proba con codigo, candidato, email, GitHub o estado.</p>
+  </div>
+{% endif %}

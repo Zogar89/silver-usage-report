@@ -1,0 +1,73 @@
+{
+  "source_url": "https://developers.openai.com/api/docs/pricing",
+  "source_retrieved_at": "2026-05-05",
+  "unit": "usd_per_1m_tokens",
+  "default_processing_mode": "standard",
+  "default_context": "short",
+  "prices": [
+    {
+      "model": "gpt-5.5",
+      "processing_mode": "standard",
+      "context": "short",
+      "input": 5.0,
+      "cached_input": 0.5,
+      "output": 30.0
+    },
+    {
+      "model": "gpt-5.5-pro",
+      "processing_mode": "standard",
+      "context": "short",
+      "input": 30.0,
+      "cached_input": null,
+      "output": 180.0
+    },
+    {
+      "model": "gpt-5.4",
+      "processing_mode": "standard",
+      "context": "short",
+      "input": 2.5,
+      "cached_input": 0.25,
+      "output": 15.0
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "processing_mode": "standard",
+      "context": "short",
+      "input": 0.75,
+      "cached_input": 0.075,
+      "output": 4.5
+    },
+    {
+      "model": "gpt-5.4-nano",
+      "processing_mode": "standard",
+      "context": "short",
+      "input": 0.2,
+      "cached_input": 0.02,
+      "output": 1.25
+    },
+    {
+      "model": "gpt-5.4-pro",
+      "processing_mode": "standard",
+      "context": "short",
+      "input": 30.0,
+      "cached_input": null,
+      "output": 180.0
+    },
+    {
+      "model": "gpt-5.3-chat-latest",
+      "processing_mode": "standard",
+      "context": "short",
+      "input": 1.75,
+      "cached_input": 0.175,
+      "output": 14.0
+    },
+    {
+      "model": "gpt-5.3-codex",
+      "processing_mode": "standard",
+      "context": "short",
+      "input": 1.75,
+      "cached_input": 0.175,
+      "output": 14.0
+    }
+  ]
+}

@@ -1,21 +1,25 @@
+import time
+
 from fastapi.testclient import TestClient
 
 from app.main import app
+from tests.conftest import signed_post
 
 
-def _manual_row() -> dict[str, object]:
+def _codex_row() -> dict[str, object]:
     return {
         "provider": "openai",
         "tool": "codex",
-        "source": "manual",
+        "source": "codex_local_telemetry",
         "period_start": "2026-05-01T00:00:00Z",
         "period_end": "2026-05-02T00:00:00Z",
         "period_width": "1d",
+        "model": "gpt-5.5",
         "input_tokens": 100,
         "output_tokens": 50,
         "total_tokens": 150,
-        "cost_source": "manual",
-        "confidence": "low",
+        "cost_source": "unknown",
+        "confidence": "medium",
     }
 
 
@@ -52,12 +56,43 @@ def test_create_report_session_api_returns_session_details():
     assert data["status"] == "draft"
 
 
-def test_get_report_session_api_returns_private_session_summary_without_token():
+def test_create_report_session_rate_limits_to_five_per_candidate():
+    client = TestClient(app)
+    for index in range(5):
+        response = client.post(
+            "/api/usage-report/sessions",
+            json={"candidate_ref": "cand_limited", "reporter_email": f"limited{index}@silver.dev"},
+        )
+        assert response.status_code == 201
+
+    rejected = client.post(
+        "/api/usage-report/sessions",
+        json={"candidate_ref": "cand_limited", "reporter_email": "another@silver.dev"},
+    )
+
+    assert rejected.status_code == 429
+    assert rejected.json()["detail"] == "maximum report sessions reached for this candidate"
+
+
+def test_anonymous_report_sessions_do_not_share_candidate_limit():
+    client = TestClient(app)
+
+    responses = [client.post("/api/usage-report/sessions", json={}) for _ in range(6)]
+
+    assert [response.status_code for response in responses] == [201, 201, 201, 201, 201, 201]
+
+
+def test_get_report_session_api_requires_management_token():
     client = TestClient(app)
     session = _create_session(client)
 
-    response = client.get(f"/api/usage-report/sessions/{session['id']}")
+    denied = client.get(f"/api/usage-report/sessions/{session['id']}")
+    response = client.get(
+        f"/api/usage-report/sessions/{session['id']}",
+        params={"token": session["private_token"]},
+    )
 
+    assert denied.status_code == 401
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == session["id"]
@@ -85,15 +120,123 @@ def test_get_private_report_status_requires_management_token():
     )
 
 
+def test_mutating_report_session_api_requires_management_token():
+    client = TestClient(app)
+    session = _create_session(client)
+
+    preview = client.post(f"/api/usage-report/sessions/{session['id']}/preview", json={"rows": [_codex_row()]})
+    submit = client.post(
+        f"/api/usage-report/sessions/{session['id']}/submit",
+        json={
+            "report_session_id": session["id"],
+            "generated_at": "2026-05-04T00:00:00Z",
+            "rows": [_codex_row()],
+            "warnings": [],
+            "user_confirmation": {
+                "preview_shown": True,
+                "confirmed_at": "2026-05-04T00:01:00Z",
+            },
+        },
+    )
+    diagnostic = client.post(
+        f"/api/usage-report/sessions/{session['id']}/collector-diagnostics",
+        json={"stage": "x", "message": "missing"},
+    )
+    deleted = client.delete(f"/api/usage-report/sessions/{session['id']}")
+
+    assert preview.status_code == 401
+    assert submit.status_code == 401
+    assert diagnostic.status_code == 401
+    assert deleted.status_code == 401
+
+
+def test_collector_diagnostics_are_recorded_for_failed_script_runs():
+    client = TestClient(app)
+    session = _create_session(client)
+
+    response = signed_post(
+        client,
+        f"/api/usage-report/sessions/{session['id']}/collector-diagnostics",
+        session["private_token"],
+        {
+            "stage": "lectura de sesiones locales",
+            "error_type": "System.Exception",
+            "message": "No se encontro %USERPROFILE%\\.codex\\sessions",
+            "solution_hint": "Revisar usuario de Windows.",
+            "collector_version": "0.5.0-powershell",
+            "powershell_version": "5.1",
+            "os": "Windows",
+            "sessions_dir_status": "missing",
+            "rollout_file_count": 0,
+            "context": {"days": 90},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "recorded"
+
+    status = client.get(
+        f"/api/usage-report/sessions/{session['id']}/status",
+        params={"token": session["private_token"]},
+    )
+
+    assert status.status_code == 200
+    diagnostic = status.json()["collector_diagnostics"][0]
+    assert diagnostic["stage"] == "lectura de sesiones locales"
+    assert diagnostic["sessions_dir_status"] == "missing"
+    assert diagnostic["rollout_file_count"] == 0
+
+
+def test_collector_diagnostics_reject_sensitive_context():
+    client = TestClient(app)
+    session = _create_session(client)
+
+    response = signed_post(
+        client,
+        f"/api/usage-report/sessions/{session['id']}/collector-diagnostics",
+        session["private_token"],
+        {"stage": "x", "message": "missing", "context": {"api_key": "secret"}},
+    )
+
+    assert response.status_code == 422
+
+
+def test_mutating_report_session_api_requires_valid_payload_signature():
+    client = TestClient(app)
+    session = _create_session(client)
+
+    missing_signature = client.post(
+        f"/api/usage-report/sessions/{session['id']}/preview",
+        params={"token": session["private_token"]},
+        json={"rows": [_codex_row()]},
+    )
+    bad_signature = client.post(
+        f"/api/usage-report/sessions/{session['id']}/preview",
+        params={"token": session["private_token"]},
+        json={"rows": [_codex_row()]},
+        headers={
+            "x-silver-timestamp": str(int(time.time())),
+            "x-silver-signature": "bad",
+        },
+    )
+
+    assert missing_signature.status_code == 401
+    assert missing_signature.json()["detail"] == "signed payload required"
+    assert bad_signature.status_code == 401
+    assert bad_signature.json()["detail"] == "invalid payload signature"
+
+
 def test_preview_report_rows_updates_session_status_and_totals():
     client = TestClient(app)
     session = _create_session(client)
 
-    response = client.post(
+    response = signed_post(
+        client,
         f"/api/usage-report/sessions/{session['id']}/preview",
-        json={
-            "rows": [_manual_row()],
-            "warnings": [{"code": "manual_data", "message": "Manual data is lower confidence."}],
+        session["private_token"],
+        {
+            "rows": [_codex_row()],
+            "warnings": [{"code": "codex_local_data", "message": "Codex local telemetry."}],
         },
     )
 
@@ -102,20 +245,25 @@ def test_preview_report_rows_updates_session_status_and_totals():
     assert data["status"] == "previewed"
     assert data["row_count"] == 1
     assert data["total_tokens"] == 150
-    assert data["rows"][0]["confidence"] == "low"
-    assert data["warnings"][0]["code"] == "manual_data"
+    assert data["total_cost_usd"] == 0.002
+    assert data["rows"][0]["cost_usd"] == 0.002
+    assert data["rows"][0]["cost_source"] == "estimated"
+    assert data["rows"][0]["confidence"] == "medium"
+    assert data["warnings"][0]["code"] == "codex_local_data"
 
 
-def test_submit_requires_a_preview_first():
+def test_submit_after_local_preview_marks_session_submitted():
     client = TestClient(app)
     session = _create_session(client)
 
-    response = client.post(
+    response = signed_post(
+        client,
         f"/api/usage-report/sessions/{session['id']}/submit",
-        json={
+        session["private_token"],
+        {
             "report_session_id": session["id"],
             "generated_at": "2026-05-04T00:00:00Z",
-            "rows": [_manual_row()],
+            "rows": [_codex_row()],
             "warnings": [],
             "user_confirmation": {
                 "preview_shown": True,
@@ -124,24 +272,33 @@ def test_submit_requires_a_preview_first():
         },
     )
 
-    assert response.status_code == 409
-    assert response.json()["detail"] == "report preview is required before submit"
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "submitted"
+    assert data["row_count"] == 1
+    assert data["total_tokens"] == 150
+    assert data["total_cost_usd"] == 0.002
+    assert data["submitted_at"] == "2026-05-04T00:01:00Z"
 
 
 def test_submit_after_preview_marks_session_submitted():
     client = TestClient(app)
     session = _create_session(client)
-    client.post(
+    signed_post(
+        client,
         f"/api/usage-report/sessions/{session['id']}/preview",
-        json={"rows": [_manual_row()], "warnings": []},
+        session["private_token"],
+        {"rows": [_codex_row()], "warnings": []},
     )
 
-    response = client.post(
+    response = signed_post(
+        client,
         f"/api/usage-report/sessions/{session['id']}/submit",
-        json={
+        session["private_token"],
+        {
             "report_session_id": session["id"],
             "generated_at": "2026-05-04T00:00:00Z",
-            "rows": [_manual_row()],
+            "rows": [_codex_row()],
             "warnings": [],
             "user_confirmation": {
                 "preview_shown": True,
@@ -161,16 +318,20 @@ def test_submit_after_preview_marks_session_submitted():
 def test_delete_submitted_report_clears_report_rows():
     client = TestClient(app)
     session = _create_session(client)
-    client.post(
+    signed_post(
+        client,
         f"/api/usage-report/sessions/{session['id']}/preview",
-        json={"rows": [_manual_row()], "warnings": []},
+        session["private_token"],
+        {"rows": [_codex_row()], "warnings": []},
     )
-    client.post(
+    signed_post(
+        client,
         f"/api/usage-report/sessions/{session['id']}/submit",
-        json={
+        session["private_token"],
+        {
             "report_session_id": session["id"],
             "generated_at": "2026-05-04T00:00:00Z",
-            "rows": [_manual_row()],
+            "rows": [_codex_row()],
             "warnings": [],
             "user_confirmation": {
                 "preview_shown": True,
@@ -179,7 +340,7 @@ def test_delete_submitted_report_clears_report_rows():
         },
     )
 
-    response = client.delete(f"/api/usage-report/sessions/{session['id']}")
+    response = client.delete(f"/api/usage-report/sessions/{session['id']}", params={"token": session["private_token"]})
 
     assert response.status_code == 200
     data = response.json()
@@ -187,27 +348,3 @@ def test_delete_submitted_report_clears_report_rows():
     assert data["row_count"] == 0
     assert data["total_tokens"] == 0
     assert data["rows"] == []
-
-
-def test_preview_csv_import_updates_session_summary():
-    client = TestClient(app)
-    session = _create_session(client)
-
-    response = client.post(
-        f"/api/usage-report/sessions/{session['id']}/preview/csv",
-        json={
-            "csv_text": (
-                "provider,tool,source,period_start,period_end,period_width,"
-                "input_tokens,output_tokens,cost_source,confidence\n"
-                "openai,codex,csv,2026-05-01T00:00:00Z,2026-05-02T00:00:00Z,"
-                "1d,100,50,manual,medium\n"
-            )
-        },
-    )
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "previewed"
-    assert data["row_count"] == 1
-    assert data["total_tokens"] == 150
-    assert data["rows"][0]["source"] == "csv"

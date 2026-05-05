@@ -9,24 +9,20 @@ def test_github_actions_ci_runs_tests_and_docker_build():
     assert "python-version: '3.13'" in workflow
 
 
-def test_collector_binary_build_is_documented_in_project_config():
+def test_candidate_collector_does_not_require_binary_build():
     pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
-    workflow = Path(".github/workflows/collector.yml").read_text(encoding="utf-8")
 
-    assert "collector = [" in pyproject
-    assert '"pyinstaller>=6.13.0"' in pyproject
+    assert "pyinstaller" not in pyproject.lower()
     assert 'silver-usage-collector = "cli.main:main"' in pyproject
-    assert "python -m PyInstaller packaging/pyinstaller/silver-usage-collector.spec" in workflow
-    assert "windows-latest" in workflow
-    assert "macos-latest" in workflow
-    assert "ubuntu-latest" in workflow
+    assert not Path(".github/workflows/collector.yml").exists()
+    assert not Path("app/web/static/downloads/silver-usage-collector.exe").exists()
 
 
 def test_python_package_discovery_is_explicit():
     pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
 
     assert "[tool.setuptools.packages.find]" in pyproject
-    assert 'include = ["app*", "cli*", "mcp_server*"]' in pyproject
+    assert 'include = ["app*", "cli*"]' in pyproject
     assert 'exclude = ["tests*", "docs*", "packaging*"]' in pyproject
 
 

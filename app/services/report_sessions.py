@@ -4,10 +4,41 @@ from secrets import token_urlsafe
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.db.models import ReportSessionModel, ReportWarningModel, UsageReportRowModel
+from app.db.models import (
+    CollectorDiagnosticModel,
+    ReportSessionModel,
+    ReportWarningModel,
+    UsageReportRowModel,
+)
 from app.schemas.usage_report import ReportWarning, UsageReportPayload, UsageReportRow
+from app.services.openai_pricing import estimate_report_rows_cost
+
+MAX_REPORT_SESSIONS_PER_CANDIDATE = 5
+DEFAULT_REPORTS_PER_PAGE = 25
+MAX_REPORTS_PER_PAGE = 100
+
+
+class ReportSessionLimitError(ValueError):
+    pass
+
+
+class CollectorDiagnostic(BaseModel):
+    id: int | None = None
+    report_session_id: str
+    stage: str
+    error_type: str | None = None
+    message: str
+    solution_hint: str | None = None
+    collector_version: str | None = None
+    powershell_version: str | None = None
+    os: str | None = None
+    sessions_dir_status: str | None = None
+    rollout_file_count: int | None = None
+    context: dict[str, object] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class ReportSession(BaseModel):
@@ -26,6 +57,7 @@ class ReportSession(BaseModel):
     submitted_at: datetime | None = None
     rows: list[UsageReportRow] = Field(default_factory=list)
     warnings: list[ReportWarning] = Field(default_factory=list)
+    collector_diagnostics: list[CollectorDiagnostic] = Field(default_factory=list)
 
 
 class DailyUsageSummary(BaseModel):
@@ -50,13 +82,24 @@ class ReportSessionSummary(BaseModel):
     status: str
     row_count: int
     total_tokens: int
+    total_cost_usd: float
     daily_usage: list[DailyUsageSummary]
     rows: list[UsageReportRow]
     warnings: list[ReportWarning]
+    collector_diagnostics: list[CollectorDiagnostic] = Field(default_factory=list)
     created_at: datetime | None = None
     expires_at: datetime | None = None
     submitted_at: datetime | None = None
     management_url: str | None = None
+
+
+class ReportSessionPage(BaseModel):
+    items: list[ReportSessionSummary]
+    page: int
+    per_page: int
+    total: int
+    page_count: int
+    query: str | None = None
 
 
 def create_report_session(
@@ -68,6 +111,20 @@ def create_report_session(
     candidate_ref: str | None = None,
     campaign_ref: str | None = None,
 ) -> ReportSession:
+    reporter_label = _clean_identifier(reporter_label)
+    reporter_email = _clean_identifier(reporter_email)
+    github_handle = _clean_identifier(github_handle)
+    x_handle = _clean_identifier(x_handle)
+    candidate_ref = _clean_identifier(candidate_ref)
+    campaign_ref = _clean_identifier(campaign_ref)
+    _ensure_candidate_session_limit(
+        db,
+        reporter_label=reporter_label,
+        reporter_email=reporter_email,
+        github_handle=github_handle,
+        x_handle=x_handle,
+        candidate_ref=candidate_ref,
+    )
     created_at = datetime.now(UTC)
     private_token = token_urlsafe(32)
     session_model = ReportSessionModel(
@@ -115,6 +172,50 @@ def list_report_sessions(db: Session) -> list[ReportSessionSummary]:
     return [summarize_report_session(_to_report_session(session)) for session in session_models]
 
 
+def list_report_sessions_page(
+    db: Session,
+    *,
+    page: int = 1,
+    per_page: int = DEFAULT_REPORTS_PER_PAGE,
+    query: str | None = None,
+) -> ReportSessionPage:
+    page = max(page, 1)
+    per_page = min(max(per_page, 1), MAX_REPORTS_PER_PAGE)
+    normalized_query = query.strip() if query else None
+    report_query = db.query(ReportSessionModel)
+    if normalized_query:
+        pattern = f"%{normalized_query}%"
+        report_query = report_query.filter(
+            or_(
+                ReportSessionModel.public_code.ilike(pattern),
+                ReportSessionModel.candidate_ref.ilike(pattern),
+                ReportSessionModel.campaign_ref.ilike(pattern),
+                ReportSessionModel.reporter_label.ilike(pattern),
+                ReportSessionModel.reporter_email.ilike(pattern),
+                ReportSessionModel.github_handle.ilike(pattern),
+                ReportSessionModel.x_handle.ilike(pattern),
+                ReportSessionModel.status.ilike(pattern),
+            )
+        )
+    total = report_query.count()
+    page_count = max((total + per_page - 1) // per_page, 1)
+    page = min(page, page_count)
+    session_models = (
+        report_query.order_by(ReportSessionModel.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    return ReportSessionPage(
+        items=[summarize_report_session(_to_report_session(session)) for session in session_models],
+        page=page,
+        per_page=per_page,
+        total=total,
+        page_count=page_count,
+        query=normalized_query,
+    )
+
+
 def summarize_report_session(session: ReportSession) -> ReportSessionSummary:
     return ReportSessionSummary(
         id=session.id,
@@ -128,9 +229,11 @@ def summarize_report_session(session: ReportSession) -> ReportSessionSummary:
         status=session.status,
         row_count=len(session.rows),
         total_tokens=sum(row.total_tokens or 0 for row in session.rows),
+        total_cost_usd=round(sum(row.cost_usd or 0 for row in session.rows), 6),
         daily_usage=_summarize_daily_usage(session.rows),
         rows=session.rows,
         warnings=session.warnings,
+        collector_diagnostics=session.collector_diagnostics,
         created_at=session.created_at,
         expires_at=session.expires_at,
         submitted_at=session.submitted_at,
@@ -144,6 +247,7 @@ def preview_report_session(
     warnings: list[ReportWarning],
 ) -> ReportSessionSummary:
     session_model = _require_session_model(db, session.id)
+    rows = estimate_report_rows_cost(rows)
     session_model.rows = [_to_row_model(row) for row in rows]
     session_model.warnings = [_to_warning_model(warning) for warning in warnings]
     session_model.status = "previewed"
@@ -158,7 +262,8 @@ def submit_report_session(
     payload: UsageReportPayload,
 ) -> ReportSessionSummary:
     session_model = _require_session_model(db, session.id)
-    session_model.rows = [_to_row_model(row) for row in payload.rows]
+    rows = estimate_report_rows_cost(payload.rows)
+    session_model.rows = [_to_row_model(row) for row in rows]
     session_model.warnings = [_to_warning_model(warning) for warning in payload.warnings]
     session_model.submitted_at = payload.user_confirmation.confirmed_at
     session_model.status = "submitted"
@@ -176,6 +281,53 @@ def delete_report_session_data(db: Session, session: ReportSession) -> ReportSes
     db.commit()
     db.refresh(session_model)
     return summarize_report_session(_to_report_session(session_model))
+
+
+def update_report_session_identity(
+    db: Session,
+    session: ReportSession,
+    reporter_label: str | None = None,
+    reporter_email: str | None = None,
+    github_handle: str | None = None,
+    x_handle: str | None = None,
+    candidate_ref: str | None = None,
+    campaign_ref: str | None = None,
+) -> ReportSession:
+    session_model = _require_session_model(db, session.id)
+    session_model.reporter_label = reporter_label
+    session_model.reporter_email = reporter_email
+    session_model.github_handle = github_handle
+    session_model.x_handle = x_handle
+    session_model.candidate_ref = candidate_ref
+    session_model.campaign_ref = campaign_ref
+    db.commit()
+    db.refresh(session_model)
+    return _to_report_session(session_model)
+
+
+def record_collector_diagnostic(
+    db: Session,
+    session: ReportSession,
+    diagnostic: CollectorDiagnostic,
+) -> CollectorDiagnostic:
+    diagnostic_model = CollectorDiagnosticModel(
+        report_session_id=session.id,
+        stage=diagnostic.stage[:120],
+        error_type=diagnostic.error_type[:255] if diagnostic.error_type else None,
+        message=diagnostic.message[:2000],
+        solution_hint=diagnostic.solution_hint[:2000] if diagnostic.solution_hint else None,
+        collector_version=diagnostic.collector_version[:80] if diagnostic.collector_version else None,
+        powershell_version=diagnostic.powershell_version[:80] if diagnostic.powershell_version else None,
+        os=diagnostic.os[:255] if diagnostic.os else None,
+        sessions_dir_status=diagnostic.sessions_dir_status[:80] if diagnostic.sessions_dir_status else None,
+        rollout_file_count=diagnostic.rollout_file_count,
+        context_json=diagnostic.context,
+        created_at=datetime.now(UTC),
+    )
+    db.add(diagnostic_model)
+    db.commit()
+    db.refresh(diagnostic_model)
+    return _to_collector_diagnostic(diagnostic_model)
 
 
 def _summarize_daily_usage(rows: list[UsageReportRow]) -> list[DailyUsageSummary]:
@@ -200,6 +352,47 @@ def _summarize_daily_usage(rows: list[UsageReportRow]) -> list[DailyUsageSummary
         values["reasoning_tokens"] += row.reasoning_tokens or 0
         values["total_tokens"] += row.total_tokens or 0
     return [DailyUsageSummary(day=day, **values) for day, values in sorted(by_day.items())]
+
+
+def _ensure_candidate_session_limit(
+    db: Session,
+    *,
+    reporter_label: str | None,
+    reporter_email: str | None,
+    github_handle: str | None,
+    x_handle: str | None,
+    candidate_ref: str | None,
+) -> None:
+    filters = []
+    for column, value in (
+        (ReportSessionModel.candidate_ref, candidate_ref),
+        (ReportSessionModel.github_handle, github_handle),
+        (ReportSessionModel.reporter_email, reporter_email),
+        (ReportSessionModel.x_handle, x_handle),
+        (ReportSessionModel.reporter_label, reporter_label),
+    ):
+        normalized = _normalized_identifier(value)
+        if normalized:
+            filters.append(func.lower(column) == normalized)
+    if not filters:
+        return
+    count = db.query(ReportSessionModel).filter(or_(*filters)).count()
+    if count >= MAX_REPORT_SESSIONS_PER_CANDIDATE:
+        raise ReportSessionLimitError("candidate report session limit reached")
+
+
+def _normalized_identifier(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip().lower()
+    return stripped or None
+
+
+def _clean_identifier(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
 
 
 def _hash_token(private_token: str) -> str:
@@ -233,6 +426,10 @@ def _to_report_session(
         submitted_at=_as_utc(session_model.submitted_at) if session_model.submitted_at else None,
         rows=[_to_row_schema(row) for row in session_model.rows],
         warnings=[_to_warning_schema(warning) for warning in session_model.warnings],
+        collector_diagnostics=[
+            _to_collector_diagnostic(diagnostic)
+            for diagnostic in session_model.collector_diagnostics
+        ],
     )
 
 
@@ -299,6 +496,24 @@ def _to_warning_schema(warning: ReportWarningModel) -> ReportWarning:
         tool=warning.tool,
         code=warning.code,
         message=warning.message,
+    )
+
+
+def _to_collector_diagnostic(diagnostic: CollectorDiagnosticModel) -> CollectorDiagnostic:
+    return CollectorDiagnostic(
+        id=diagnostic.id,
+        report_session_id=diagnostic.report_session_id,
+        stage=diagnostic.stage,
+        error_type=diagnostic.error_type,
+        message=diagnostic.message,
+        solution_hint=diagnostic.solution_hint,
+        collector_version=diagnostic.collector_version,
+        powershell_version=diagnostic.powershell_version,
+        os=diagnostic.os,
+        sessions_dir_status=diagnostic.sessions_dir_status,
+        rollout_file_count=diagnostic.rollout_file_count,
+        context=diagnostic.context_json or {},
+        created_at=_as_utc(diagnostic.created_at),
     )
 
 

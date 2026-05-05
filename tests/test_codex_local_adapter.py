@@ -210,11 +210,24 @@ def test_codex_sessions_adapter_extracts_usage_from_rollout_jsonl():
                     json.dumps({"type": "user_message", "text": "do not upload this"}),
                     json.dumps(
                         {
+                            "timestamp": "2026-04-25T05:21:55Z",
+                            "type": "event_msg",
+                            "payload": {
+                                "type": "session_meta",
+                                "model": "gpt-5.5",
+                                "model_provider": "openai",
+                                "model_context_window": 258400,
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
                             "timestamp": "2026-04-25T05:21:56Z",
                             "type": "event_msg",
                             "payload": {
                                 "type": "token_count",
                                 "info": {
+                                    "model_context_window": 258400,
                                     "total_token_usage": {
                                         "input_tokens": 100,
                                         "cached_input_tokens": 25,
@@ -229,6 +242,11 @@ def test_codex_sessions_adapter_extracts_usage_from_rollout_jsonl():
                                         "reasoning_output_tokens": 10,
                                         "total_tokens": 185,
                                     },
+                                },
+                                "rate_limits": {
+                                    "plan_type": "pro",
+                                    "primary": {"used_percent": 12.5},
+                                    "secondary": {"used_percent": 3.5},
                                 },
                             },
                         }
@@ -246,8 +264,13 @@ def test_codex_sessions_adapter_extracts_usage_from_rollout_jsonl():
         assert rows[0].output_tokens == 50
         assert rows[0].reasoning_tokens == 10
         assert rows[0].total_tokens == 185
+        assert rows[0].model == "gpt-5.5"
         assert rows[0].evidence is not None
         assert rows[0].evidence.query_fingerprint == "codex_sessions_token_count_total_usage_v1"
+        assert rows[0].evidence.model_context_window == 258400
+        assert rows[0].evidence.plan_type == "pro"
+        assert rows[0].evidence.rate_limit_primary_used_percent == 12.5
+        assert rows[0].evidence.rate_limit_secondary_used_percent == 3.5
         assert warnings == []
         serialized = json.dumps([row.model_dump(mode="json") for row in rows])
         assert "do not upload this" not in serialized

@@ -1,10 +1,40 @@
 {% extends "base.html" %}
 
 {% block content %}
+  {% set is_admin = viewer == "admin" %}
   <section class="stack">
-    <p class="eyebrow">Para Silver</p>
-    <h1>Detalle del reporte</h1>
-    <p class="lede">Datos agregados y vinculacion del reporte enviado.</p>
+    <p class="eyebrow">{{ "Para Silver" if is_admin else "Para talento" }}</p>
+    <h1>{{ "Detalle del reporte" if is_admin else "Tu reporte de uso de IA" }}</h1>
+    <p class="lede">
+      {% if is_admin %}
+        Datos agregados y vinculacion del reporte enviado.
+      {% else %}
+        Esta es la ficha agregada que Silver recibe para analizar tu uso de IA como programador.
+      {% endif %}
+    </p>
+    {% if saved %}
+      <p class="notice">Datos del candidato actualizados.</p>
+    {% endif %}
+    {% if sent %}
+      <p class="notice">Reporte enviado. Ya podes revisar la ficha completa.</p>
+    {% endif %}
+    {% if is_admin %}
+      <div class="actions">
+        <a class="button-link secondary" href="/admin/reports">Volver al panel</a>
+        <a class="button-link secondary" href="#candidate-data">Editar datos</a>
+        {% if session.status != "deleted" %}
+          <form method="post" action="/admin/reports/{{ session.id }}/delete" class="inline-form">
+            <button class="danger" type="submit" onclick="return confirm('Eliminar los datos del reporte {{ session.public_code }}?')">Borrar reporte</button>
+          </form>
+        {% endif %}
+      </div>
+    {% elif session.status != "deleted" %}
+      <div class="actions">
+        <form method="post" action="/reports/sessions/{{ session.id }}/delete?token={{ management_token }}" class="inline-form">
+          <button class="danger" type="submit" onclick="return confirm('Borrar los datos de este reporte?')">Borrar reporte</button>
+        </form>
+      </div>
+    {% endif %}
   </section>
 
   <section class="two-column">
@@ -29,9 +59,9 @@
         <dt>Campaña</dt>
         <dd>{{ session.campaign_ref or "Sin informar" }}</dd>
         <dt>Creado</dt>
-        <dd>{{ session.created_at }}</dd>
+        <dd>{{ session.created_at | datetime_short }}</dd>
         <dt>Expira</dt>
-        <dd>{{ session.expires_at }}</dd>
+        <dd>{{ session.expires_at | datetime_short }}</dd>
       </dl>
     </div>
 
@@ -42,18 +72,125 @@
       </div>
       <dl>
         <dt>Estado</dt>
-        <dd>{{ session.status }}</dd>
+        <dd><span class="status-pill status-{{ session.status }}">{{ session.status | status_label }}</span></dd>
         <dt>Filas</dt>
-        <dd>{{ summary.row_count }}</dd>
+        <dd>{{ summary.row_count | number }}</dd>
         <dt>Tokens totales</dt>
-        <dd>{{ summary.total_tokens }}</dd>
+        <dd>{{ summary.total_tokens | token_amount }}</dd>
+        <dt>Costo estimado</dt>
+        <dd>{{ summary.total_cost_usd | usd }}</dd>
         <dt>Advertencias</dt>
-        <dd>{{ summary.warnings | length }}</dd>
+        <dd>{{ summary.warnings | length | number }}</dd>
+        {% if is_admin %}
+          <dt>Diagnosticos collector</dt>
+          <dd>{{ summary.collector_diagnostics | length | number }}</dd>
+        {% endif %}
         <dt>Enviado</dt>
-        <dd>{{ summary.submitted_at or "No enviado" }}</dd>
+        <dd>{{ summary.submitted_at | datetime_short if summary.submitted_at else "No enviado" }}</dd>
       </dl>
     </aside>
   </section>
+
+  <section class="panel">
+    <div class="panel-heading split-heading">
+      <div>
+        <p class="eyebrow">Analisis</p>
+        <h2>Uso de IA del candidato</h2>
+      </div>
+      <p class="muted">Metricas derivadas de este reporte. Sirven para leer intensidad, continuidad y composicion del uso.</p>
+    </div>
+    {% if summary.row_count %}
+      <section class="metric-grid" aria-label="Metricas de uso de IA del candidato">
+        <div class="metric">
+          <span>Requests</span>
+          <strong>{{ usage_metrics.request_count | number }}</strong>
+          <small>{{ usage_metrics.total_tokens | token_amount }} tokens totales</small>
+        </div>
+        <div class="metric">
+          <span>Tokens por dia activo</span>
+          <strong>{{ usage_metrics.tokens_per_active_day | token_amount }}</strong>
+          <small>Promedio por dia con uso</small>
+        </div>
+        <div class="metric">
+          <span>Dias activos</span>
+          <strong>{{ usage_metrics.active_day_count }}</strong>
+          <small>{{ summary.daily_usage | length }} buckets diarios</small>
+        </div>
+        <div class="metric">
+          <span>Costo estimado</span>
+          <strong>{{ usage_metrics.total_cost_usd | usd }}</strong>
+          <small>Tabla local OpenAI</small>
+        </div>
+        <div class="metric">
+          <span>Modelos</span>
+          <strong>{{ usage_metrics.model_count }}</strong>
+          <small>{{ usage_metrics.models | join(", ") if usage_metrics.models else "Sin modelo informado" }}</small>
+        </div>
+      </section>
+      <dl class="usage-breakdown">
+        <dt>Input total</dt>
+        <dd>{{ usage_metrics.input_total_tokens | token_amount }} tokens</dd>
+        <dt>Input nuevo</dt>
+        <dd>{{ usage_metrics.fresh_input_tokens | token_amount }} ({{ usage_metrics.fresh_input_share | percent }} del input total)</dd>
+        <dt>Input cacheado</dt>
+        <dd>{{ usage_metrics.cached_input_tokens | token_amount }} ({{ usage_metrics.cache_share | percent }} del input total)</dd>
+        <dt>Output</dt>
+        <dd>{{ usage_metrics.output_tokens | token_amount }} ({{ usage_metrics.output_share | percent }} de tokens totales, {{ usage_metrics.output_input_percent | percent }} del input total)</dd>
+        <dt>Output / input nuevo</dt>
+        <dd>{{ usage_metrics.output_fresh_input_percent | percent }}</dd>
+        <dt>Razonamiento</dt>
+        <dd>{{ usage_metrics.reasoning_tokens | token_amount }} ({{ usage_metrics.reasoning_share | percent }} del output)</dd>
+      </dl>
+    {% else %}
+      <div class="empty-state">
+        <h2>Sin metricas de uso</h2>
+        <p>Este candidato todavia no tiene filas recolectadas. Cuando cargue un reporte, las metricas apareceran aca.</p>
+      </div>
+    {% endif %}
+  </section>
+
+  {% if is_admin %}
+    <section class="panel" id="candidate-data">
+      <div class="panel-heading split-heading">
+        <div>
+          <p class="eyebrow">Edicion</p>
+          <h2>Datos del candidato</h2>
+        </div>
+        <p class="muted">Estos campos ordenan el panel admin; no modifican las filas de uso recolectadas.</p>
+      </div>
+      <form method="post" action="/admin/reports/{{ session.id }}/identity" class="identity-form">
+        <div class="field-grid">
+          <label>
+            Nombre
+            <input name="reporter_label" value="{{ session.reporter_label or '' }}" autocomplete="name">
+          </label>
+          <label>
+            Email
+            <input name="reporter_email" type="email" value="{{ session.reporter_email or '' }}" autocomplete="email">
+          </label>
+          <label>
+            GitHub
+            <input name="github_handle" value="{{ session.github_handle or '' }}" autocomplete="off">
+          </label>
+          <label>
+            X
+            <input name="x_handle" value="{{ session.x_handle or '' }}" autocomplete="off">
+          </label>
+          <label>
+            Candidato
+            <input name="candidate_ref" value="{{ session.candidate_ref or '' }}" autocomplete="off">
+          </label>
+          <label>
+            Campaña
+            <input name="campaign_ref" value="{{ session.campaign_ref or '' }}" autocomplete="off">
+          </label>
+        </div>
+        <div class="actions">
+          <button type="submit">Guardar cambios</button>
+        </div>
+      </form>
+    </section>
+  {% endif %}
 
   {% if summary.warnings %}
     <section class="panel warning-panel">
@@ -73,34 +210,248 @@
     </section>
   {% endif %}
 
+  {% if is_admin and summary.collector_diagnostics %}
+    <section class="panel warning-panel">
+      <div class="panel-heading">
+        <p class="eyebrow">Collector</p>
+        <h2>Fallos reportados por el script</h2>
+      </div>
+      <div class="table-wrap">
+        <table class="compact-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Etapa</th>
+              <th>Error</th>
+              <th>Contexto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for diagnostic in summary.collector_diagnostics %}
+              <tr>
+                <td>{{ diagnostic.created_at | datetime_short }}</td>
+                <td>{{ diagnostic.stage }}</td>
+                <td>
+                  <strong>{{ diagnostic.error_type or "Error" }}</strong>
+                  <span class="subtle-line">{{ diagnostic.message }}</span>
+                  {% if diagnostic.solution_hint %}
+                    <span class="subtle-line">{{ diagnostic.solution_hint }}</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <span>{{ diagnostic.sessions_dir_status or "sin estado de carpeta" }}</span>
+                  <span class="subtle-line">rollouts {{ diagnostic.rollout_file_count if diagnostic.rollout_file_count is not none else "sin dato" }}</span>
+                  <span class="subtle-line">collector {{ diagnostic.collector_version or "sin version" }}</span>
+                  <span class="subtle-line">PowerShell {{ diagnostic.powershell_version or "sin version" }}</span>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+
   <section class="panel table-wrap">
     <div class="panel-heading">
       <p class="eyebrow">Serie diaria</p>
       <h2>Uso por dia</h2>
     </div>
     {% if summary.daily_usage %}
+      <div class="usage-chart">
+        <div class="chart-toolbar">
+          <div class="chart-legend" aria-label="Series del grafico">
+            <span class="legend-item"><i class="legend-swatch fresh-input"></i>Input nuevo</span>
+            <span class="legend-item" data-cache-legend><i class="legend-swatch cache"></i>Input cacheado</span>
+            <span class="legend-item"><i class="legend-swatch output"></i>Output</span>
+            <span class="legend-item"><i class="legend-swatch reasoning"></i>Razonamiento</span>
+          </div>
+          <button class="chart-toggle" type="button" data-cache-toggle aria-pressed="true">Cacheado visible</button>
+        </div>
+        <div class="chart-canvas-wrap">
+          <canvas id="usage-series-chart" aria-label="Serie temporal de tokens por dia clasificada por tipo" role="img"></canvas>
+        </div>
+      </div>
+      <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+      <script>
+        (() => {
+          const chartData = {{ usage_metrics.chartjs | tojson }};
+          const canvas = document.getElementById("usage-series-chart");
+          if (!canvas || !window.Chart) return;
+          const cacheToggle = document.querySelector("[data-cache-toggle]");
+          const cacheLegend = document.querySelector("[data-cache-legend]");
+
+          const compactTokens = (value) => {
+            const amount = Number(value || 0);
+            const abs = Math.abs(amount);
+            const format = (number) => {
+              const fixed = number.toFixed(1);
+              return fixed.endsWith(".0") ? fixed.slice(0, -2) : fixed;
+            };
+            if (abs >= 1000000) return `${format(amount / 1000000)}M`;
+            if (abs >= 1000) return `${format(amount / 1000)}K`;
+            return Math.round(amount).toLocaleString("en-US");
+          };
+          const shortDate = (value) => {
+            const [, month, day] = value.split("-");
+            return `${day}/${month}`;
+          };
+
+          const usageChart = new Chart(canvas, {
+            type: "bar",
+            data: {
+              labels: chartData.labels.map(shortDate),
+              datasets: [
+                {
+                  label: "Input nuevo",
+                  data: chartData.fresh_input,
+                  backgroundColor: "#2f7f8f",
+                  hoverBackgroundColor: "#276b79",
+                  borderColor: "#ffffff",
+                  borderWidth: 1,
+                  borderRadius: 6,
+                  borderSkipped: false,
+                  stack: "tokens",
+                  maxBarThickness: 46,
+                },
+                {
+                  label: "Input cacheado",
+                  data: chartData.cache,
+                  backgroundColor: "#c8912b",
+                  hoverBackgroundColor: "#aa7721",
+                  borderColor: "#ffffff",
+                  borderWidth: 1,
+                  borderRadius: 6,
+                  borderSkipped: false,
+                  stack: "tokens",
+                  maxBarThickness: 46,
+                },
+                {
+                  label: "Output",
+                  data: chartData.output,
+                  backgroundColor: "#d16b5a",
+                  hoverBackgroundColor: "#b95545",
+                  borderColor: "#ffffff",
+                  borderWidth: 1,
+                  borderRadius: 6,
+                  borderSkipped: false,
+                  stack: "tokens",
+                  maxBarThickness: 46,
+                },
+                {
+                  label: "Razonamiento",
+                  data: chartData.reasoning,
+                  backgroundColor: "#596371",
+                  hoverBackgroundColor: "#434b56",
+                  borderColor: "#ffffff",
+                  borderWidth: 1,
+                  borderRadius: 6,
+                  borderSkipped: false,
+                  stack: "tokens",
+                  maxBarThickness: 46,
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              interaction: { mode: "index", intersect: false },
+              datasets: {
+                bar: {
+                  categoryPercentage: 0.72,
+                  barPercentage: 0.88,
+                },
+              },
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  backgroundColor: "#25221d",
+                  borderColor: "#ded8cd",
+                  borderWidth: 1,
+                  displayColors: true,
+                  padding: 12,
+                  callbacks: {
+                    title: (items) => chartData.labels[items[0].dataIndex],
+                    label: (item) => `${item.dataset.label}: ${compactTokens(item.raw)}`,
+                    afterBody: (items) => {
+                      const index = items[0].dataIndex;
+                      return [
+                        `Total: ${compactTokens(chartData.totals[index])}`,
+                        `Requests: ${chartData.requests[index].toLocaleString("en-US")}`,
+                      ];
+                    },
+                  },
+                },
+              },
+              scales: {
+                x: {
+                  stacked: true,
+                  grid: { display: false },
+                  ticks: { color: "#5b554b", font: { size: 13, weight: "700" } },
+                },
+                y: {
+                  stacked: true,
+                  beginAtZero: true,
+                  border: { display: false },
+                  grid: { color: "#e9e1d6" },
+                  ticks: {
+                    color: "#6b6459",
+                    padding: 8,
+                    callback: (value) => compactTokens(value),
+                  },
+                },
+              },
+            },
+          });
+
+          cacheToggle?.addEventListener("click", () => {
+            const cacheDatasetIndex = 1;
+            const isVisible = usageChart.isDatasetVisible(cacheDatasetIndex);
+            usageChart.setDatasetVisibility(cacheDatasetIndex, !isVisible);
+            usageChart.update();
+            cacheToggle.textContent = isVisible ? "Cacheado oculto" : "Cacheado visible";
+            cacheToggle.setAttribute("aria-pressed", String(!isVisible));
+            cacheLegend?.classList.toggle("is-muted", isVisible);
+          });
+        })();
+      </script>
       <table class="dense-table compact-table">
         <thead>
           <tr>
             <th>Dia</th>
             <th>Requests</th>
-            <th>Tokens</th>
-            <th>Input</th>
+            <th>Tokens totales</th>
+            <th>Input nuevo</th>
+            <th>Input cache</th>
             <th>Output</th>
-            <th>Cache</th>
             <th>Razonamiento</th>
           </tr>
         </thead>
         <tbody>
-          {% for day in summary.daily_usage %}
+          {% for day in usage_metrics.daily_usage %}
             <tr>
-              <td>{{ day.day }}</td>
-              <td>{{ day.request_count }}</td>
-              <td>{{ day.total_tokens }}</td>
-              <td>{{ day.input_tokens }}</td>
-              <td>{{ day.output_tokens }}</td>
-              <td>{{ day.cached_input_tokens }}</td>
-              <td>{{ day.reasoning_tokens }}</td>
+              <td>{{ day.day | date_short }}</td>
+              <td>{{ day.request_count | number }}</td>
+              <td>
+                <strong>{{ day.total_tokens | token_amount }}</strong>
+                <span class="subtle-line">{{ day.input_total_tokens | token_amount }} input total</span>
+              </td>
+              <td>
+                {{ day.fresh_input_tokens | token_amount }}
+                <span class="subtle-line">{{ day.fresh_input_share | percent }} del input total</span>
+              </td>
+              <td>
+                {{ day.cached_input_tokens | token_amount }}
+                <span class="subtle-line">{{ day.cache_share | percent }} del input total</span>
+              </td>
+              <td>
+                {{ day.output_tokens | token_amount }}
+                <span class="subtle-line">{{ day.output_share | percent }} de tokens totales</span>
+              </td>
+              <td>
+                {{ day.reasoning_tokens | token_amount }}
+                <span class="subtle-line">{{ day.reasoning_share | percent }} del output</span>
+              </td>
             </tr>
           {% endfor %}
         </tbody>
@@ -113,62 +464,89 @@
     {% endif %}
   </section>
 
-  <section class="panel table-wrap">
+  <section class="panel">
     <div class="panel-heading">
       <p class="eyebrow">Datos</p>
-      <h2>Senales recolectadas</h2>
+      <h2>Calidad y origen de datos</h2>
     </div>
     {% if summary.rows %}
-      <table class="dense-table">
-        <thead>
-          <tr>
-            <th>Proveedor</th>
-            <th>Herramienta</th>
-            <th>Fuente</th>
-            <th>Modelo</th>
-            <th>Periodo</th>
-            <th>Requests</th>
-            <th>Tokens</th>
-            <th>Costo</th>
-            <th>Confianza</th>
-            <th>Evidencia</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in summary.rows %}
-            <tr>
-              <td>{{ row.provider }}</td>
-              <td>{{ row.tool or "other" }}</td>
-              <td>{{ row.source }}</td>
-              <td>{{ row.model or "Sin informar" }}</td>
-              <td>
-                <span>{{ row.period_start }}</span>
-                <span class="subtle-line">{{ row.period_end }}</span>
-              </td>
-              <td>{{ row.request_count or 0 }}</td>
-              <td>
-                <strong>{{ row.total_tokens or 0 }}</strong>
-                <span class="subtle-line">in {{ row.input_tokens or 0 }} / out {{ row.output_tokens or 0 }}</span>
-                <span class="subtle-line">cache {{ row.cached_input_tokens or 0 }} / razon {{ row.reasoning_tokens or 0 }}</span>
-              </td>
-              <td>
-                {{ row.cost_usd if row.cost_usd is not none else "Sin costo" }}
-                <span class="subtle-line">{{ row.cost_source }}</span>
-              </td>
-              <td>{{ row.confidence }}</td>
-              <td>
-                {% if row.evidence %}
-                  <span>{{ row.evidence.adapter or "Sin adapter" }}</span>
-                  <span class="subtle-line">{{ row.evidence.adapter_version or "Sin version" }}</span>
-                  <span class="subtle-line">filas base {{ row.evidence.row_count or 0 }}</span>
-                {% else %}
-                  Sin evidencia
-                {% endif %}
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <dl class="quality-grid">
+        <dt>Origen</dt>
+        <dd>{{ usage_metrics.data_quality.providers | join(", ") }} / {{ usage_metrics.data_quality.tools | join(", ") if usage_metrics.data_quality.tools else "herramienta no informada" }}</dd>
+        <dt>Fuente</dt>
+        <dd>{{ usage_metrics.data_quality.sources | join(", ") }}</dd>
+        <dt>Adapter</dt>
+        <dd>
+          {{ usage_metrics.data_quality.adapters | join(", ") if usage_metrics.data_quality.adapters else "Sin adapter" }}
+          <span class="subtle-line">{{ usage_metrics.data_quality.adapter_versions | join(", ") if usage_metrics.data_quality.adapter_versions else "Sin version" }}</span>
+        </dd>
+        <dt>Cobertura</dt>
+        <dd>
+          {{ usage_metrics.data_quality.period_start | date_short if usage_metrics.data_quality.period_start else "Sin inicio" }}
+          a
+          {{ usage_metrics.data_quality.period_end | date_short if usage_metrics.data_quality.period_end else "Sin fin" }}
+        </dd>
+        <dt>Base</dt>
+        <dd>{{ usage_metrics.data_quality.row_count | number }} filas agregadas / {{ usage_metrics.data_quality.base_row_count | number }} filas base</dd>
+        <dt>Costo</dt>
+        <dd>{{ usage_metrics.data_quality.cost_sources | join(", ") }}</dd>
+        <dt>Advertencias</dt>
+        <dd>{{ usage_metrics.data_quality.warning_count | number }}</dd>
+      </dl>
+
+      <details class="technical-details">
+        <summary>Ver filas tecnicas</summary>
+        <div class="table-wrap">
+          <table class="dense-table">
+            <thead>
+              <tr>
+                <th>Fuente</th>
+                <th>Modelo</th>
+                <th>Periodo</th>
+                <th>Requests</th>
+                <th>Tokens totales</th>
+                <th>Costo</th>
+                <th>Evidencia</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in summary.rows %}
+                <tr>
+                  <td>{{ row.source }}</td>
+                  <td>{{ row.model or "Sin informar" }}</td>
+                  <td>
+                    <span>{{ row.period_start | datetime_short }}</span>
+                    <span class="subtle-line">{{ row.period_end | datetime_short }}</span>
+                  </td>
+                  <td>{{ row.request_count or 0 }}</td>
+                  <td>
+                    {% set row_input_total = row.input_tokens or 0 %}
+                    {% set row_input_cacheado = row.cached_input_tokens or 0 %}
+                    {% set row_input_nuevo = [row_input_total - row_input_cacheado, 0] | max %}
+                    <strong>{{ (row.total_tokens or 0) | token_amount }}</strong>
+                    <span class="subtle-line">input total {{ row_input_total | token_amount }} / input nuevo {{ row_input_nuevo | token_amount }}</span>
+                    <span class="subtle-line">input cacheado {{ row_input_cacheado | token_amount }} / output {{ (row.output_tokens or 0) | token_amount }}</span>
+                    <span class="subtle-line">razonamiento {{ (row.reasoning_tokens or 0) | token_amount }}</span>
+                  </td>
+                  <td>
+                    {{ row.cost_usd | usd if row.cost_usd is not none else "Sin costo" }}
+                    <span class="subtle-line">{{ row.cost_source }}</span>
+                  </td>
+                  <td>
+                    {% if row.evidence %}
+                      <span>{{ row.evidence.adapter or "Sin adapter" }}</span>
+                      <span class="subtle-line">{{ row.evidence.adapter_version or "Sin version" }}</span>
+                      <span class="subtle-line">filas base {{ row.evidence.row_count or 0 }}</span>
+                    {% else %}
+                      Sin evidencia
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
     {% else %}
       <div class="empty-state">
         <h2>Sin filas recolectadas</h2>

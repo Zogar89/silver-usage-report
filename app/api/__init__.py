@@ -1,1 +1,1 @@
-"""JSON API routes."""
+"""HTTP API routes."""

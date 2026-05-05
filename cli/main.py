@@ -1,12 +1,14 @@
 import argparse
+import hmac
+import hashlib
 import json
 from pathlib import Path
 from datetime import UTC, datetime, timedelta
+import time
 from typing import Any, Sequence
-from urllib import error, request
+from urllib import error, parse, request
 
 from app.adapters.codex_local import preview_codex_local_usage, preview_codex_sessions_usage
-from app.services.imports import parse_csv_rows, parse_json_rows
 
 HTTP_HEADERS = {
     "Content-Type": "application/json",
@@ -19,12 +21,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="silver-usage-collector")
     subcommands = parser.add_subparsers(dest="command", required=True)
 
-    preview = subcommands.add_parser("preview", help="Preview a normalized JSON report file.")
-    preview.add_argument("file", type=Path)
-
-    preview_csv = subcommands.add_parser("preview-csv", help="Preview a normalized CSV report file.")
-    preview_csv.add_argument("file", type=Path)
-
     preview_codex = subcommands.add_parser(
         "preview-codex",
         help="Preview Codex local usage from a sessions directory or legacy SQLite path.",
@@ -35,17 +31,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     preview_codex.add_argument("--days", type=int, default=30)
     preview_codex.add_argument("--since")
 
-    submit = subcommands.add_parser("submit", help="Preview and submit a JSON report to a session.")
-    submit.add_argument("--session", required=True)
-    submit.add_argument("--file", required=True, type=Path)
-    submit.add_argument("--base-url", default="http://localhost:8000")
-    submit.add_argument("--yes", action="store_true")
-
     submit_codex = subcommands.add_parser(
         "submit-codex",
         help="Preview and submit Codex local usage from a sessions directory or legacy SQLite path.",
     )
     submit_codex.add_argument("--session", required=True)
+    submit_codex.add_argument("--token", required=True)
     submit_codex.add_argument("--sessions-dir", type=Path)
     submit_codex.add_argument("--state-db", type=Path)
     submit_codex.add_argument("--logs-db", type=Path)
@@ -55,17 +46,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     submit_codex.add_argument("--yes", action="store_true")
 
     args = parser.parse_args(argv)
-    if args.command == "preview":
-        return _preview_json(args.file)
-    if args.command == "preview-csv":
-        return _preview_csv(args.file)
     if args.command == "preview-codex":
         return _preview_codex(args.sessions_dir, args.state_db, args.logs_db, args.days, args.since)
-    if args.command == "submit":
-        return _submit(args.session, args.file, args.base_url, args.yes)
     if args.command == "submit-codex":
         return _submit_codex(
             args.session,
+            args.token,
             args.sessions_dir,
             args.state_db,
             args.logs_db,
@@ -75,19 +61,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.since,
         )
     return 1
-
-
-def _preview_json(path: Path) -> int:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    rows = parse_json_rows(data)
-    _print_preview(rows)
-    return 0
-
-
-def _preview_csv(path: Path) -> int:
-    rows = parse_csv_rows(path.read_text(encoding="utf-8"))
-    _print_preview(rows)
-    return 0
 
 
 def _preview_codex(
@@ -105,14 +78,9 @@ def _preview_codex(
     return 0
 
 
-def _submit(session_id: str, path: Path, base_url: str, yes: bool) -> int:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    rows = parse_json_rows(data)
-    return _submit_rows(session_id, rows, [], base_url, yes, "report")
-
-
 def _submit_codex(
     session_id: str,
+    token: str,
     sessions_dir: Path | None,
     state_db_path: Path | None,
     logs_db_path: Path | None,
@@ -122,7 +90,7 @@ def _submit_codex(
     since: str | None,
 ) -> int:
     rows, warnings = _preview_codex_source(sessions_dir, state_db_path, logs_db_path, days, since)
-    return _submit_rows(session_id, rows, warnings, base_url, yes, "Codex local telemetry")
+    return _submit_rows(session_id, token, rows, warnings, base_url, yes, "Codex local telemetry")
 
 
 def _preview_codex_source(
@@ -142,7 +110,7 @@ def _preview_codex_source(
     raise SystemExit("submit-codex requires --sessions-dir, --state-db, or --logs-db")
 
 
-def _submit_rows(session_id: str, rows, warnings, base_url: str, yes: bool, label: str) -> int:
+def _submit_rows(session_id: str, token: str, rows, warnings, base_url: str, yes: bool, label: str) -> int:
     _print_preview(rows)
     if not yes and not _confirm_submission():
         print("Refusing to submit without --yes")
@@ -150,8 +118,9 @@ def _submit_rows(session_id: str, rows, warnings, base_url: str, yes: bool, labe
 
     rows_json = [row.model_dump(mode="json") for row in rows]
     warnings_json = [warning.model_dump(mode="json") for warning in warnings]
-    preview_url = f"{base_url.rstrip('/')}/api/usage-report/sessions/{session_id}/preview"
-    submit_url = f"{base_url.rstrip('/')}/api/usage-report/sessions/{session_id}/submit"
+    token_query = parse.urlencode({"token": token})
+    preview_url = f"{base_url.rstrip('/')}/api/usage-report/sessions/{session_id}/preview?{token_query}"
+    submit_url = f"{base_url.rstrip('/')}/api/usage-report/sessions/{session_id}/submit?{token_query}"
     _post_json(preview_url, {"method": "POST", "json": {"rows": rows_json, "warnings": warnings_json}})
 
     confirmed_at = datetime.now(UTC).isoformat()
@@ -254,29 +223,58 @@ def _daily_usage(rows) -> list[tuple[str, int, int, int, int]]:
 
 def _post_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
     body = json.dumps(payload["json"]).encode("utf-8")
+    headers = dict(HTTP_HEADERS)
+    token = _token_from_url(url)
+    if token:
+        timestamp, signature = _sign_body(token, body)
+        headers["X-Silver-Timestamp"] = timestamp
+        headers["X-Silver-Signature"] = signature
     http_request = request.Request(
         url,
         data=body,
         method=payload.get("method", "POST"),
-        headers=HTTP_HEADERS,
+        headers=headers,
     )
     try:
         with request.urlopen(http_request, timeout=30) as response:
             response_body = response.read().decode("utf-8")
     except error.HTTPError as exc:
         response_body = exc.read().decode("utf-8", "replace").strip()
-        message = f"Silver API request failed: HTTP {exc.code} {exc.reason} for {url}"
+        message = f"Silver API request failed: HTTP {exc.code} {exc.reason} for {_redact_url_token(url)}"
         if response_body:
             message = f"{message}: {response_body}"
         raise SystemExit(message) from exc
     except error.URLError as exc:
-        raise SystemExit(f"Silver API request failed: could not reach {url}: {exc.reason}") from exc
+        raise SystemExit(f"Silver API request failed: could not reach {_redact_url_token(url)}: {exc.reason}") from exc
     if not response_body:
         return {}
     try:
         return json.loads(response_body)
     except json.JSONDecodeError as exc:
-        raise SystemExit(f"Silver API request failed: invalid JSON response from {url}: {response_body}") from exc
+        raise SystemExit(
+            f"Silver API request failed: invalid JSON response from {_redact_url_token(url)}: {response_body}"
+        ) from exc
+
+
+def _redact_url_token(url: str) -> str:
+    parsed = parse.urlsplit(url)
+    query = parse.parse_qsl(parsed.query, keep_blank_values=True)
+    redacted_query = parse.urlencode(
+        [(key, "[REDACTED]" if key == "token" else value) for key, value in query]
+    )
+    return parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, redacted_query, parsed.fragment))
+
+
+def _token_from_url(url: str) -> str | None:
+    parsed = parse.urlsplit(url)
+    return parse.parse_qs(parsed.query).get("token", [None])[0]
+
+
+def _sign_body(private_token: str, body: bytes) -> tuple[str, str]:
+    timestamp = str(int(time.time()))
+    message = timestamp.encode("utf-8") + b"." + body
+    signature = hmac.new(private_token.encode("utf-8"), message, hashlib.sha256).hexdigest()
+    return timestamp, signature
 
 
 if __name__ == "__main__":

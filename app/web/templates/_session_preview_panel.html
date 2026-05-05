@@ -12,34 +12,54 @@
     <h2>Datos compartidos con Silver</h2>
   </div>
   {% if summary.row_count %}
+    <p class="muted">Este es el detalle completo del payload agregado asociado a esta sesion.</p>
     <dl class="preview-summary">
       <dt>Filas</dt>
       <dd>{{ summary.row_count }}</dd>
       <dt>Tokens totales</dt>
       <dd>{{ summary.total_tokens }}</dd>
-      <dt>Confianza</dt>
-      <dd>{{ summary.rows[0].confidence }}</dd>
+      <dt>Costo</dt>
+      <dd>{{ summary.total_cost_usd | usd if summary.rows | selectattr("cost_usd") | list else "No disponible en telemetria local" }}</dd>
     </dl>
     <div class="table-wrap">
       <h3>Filas previsualizadas</h3>
-      <table>
+      <table class="dense-table payload-table">
         <thead>
           <tr>
+            <th>Periodo</th>
             <th>Proveedor</th>
             <th>Herramienta</th>
+            <th>Modelo</th>
             <th>Fuente</th>
-            <th>Tokens</th>
-            <th>Confianza</th>
+            <th>Requests</th>
+            <th>Input total</th>
+            <th>Input nuevo</th>
+            <th>Input cacheado</th>
+            <th>Output</th>
+            <th>Razonamiento</th>
+            <th>Tokens totales</th>
+            <th>Costo</th>
           </tr>
         </thead>
         <tbody>
           {% for row in summary.rows %}
             <tr>
+              <td>{{ row.period_start|date_short }}</td>
               <td>{{ row.provider }}</td>
               <td>{{ row.tool or "other" }}</td>
+              <td>{{ row.model or "sin modelo" }}</td>
               <td>{{ row.source }}</td>
+              <td>{{ row.request_count or 0 }}</td>
+              {% set row_input_nuevo = row.input_tokens or 0 %}
+              {% set row_input_cacheado = row.cached_input_tokens or 0 %}
+              {% set row_input_total = row_input_nuevo + row_input_cacheado %}
+              <td>{{ row_input_total }}</td>
+              <td>{{ row_input_nuevo }}</td>
+              <td>{{ row_input_cacheado }}</td>
+              <td>{{ row.output_tokens or 0 }}</td>
+              <td>{{ row.reasoning_tokens or 0 }}</td>
               <td>{{ row.total_tokens or 0 }}</td>
-              <td>{{ row.confidence }}</td>
+              <td>{{ row.cost_usd | usd if row.cost_usd is not none else "Sin costo" }}</td>
             </tr>
           {% endfor %}
         </tbody>

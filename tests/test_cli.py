@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
@@ -10,40 +12,6 @@ import cli.main as cli_main
 from cli.main import main
 
 
-def test_cli_preview_validates_json_report_file(capsys):
-    report_file = Path(".tmp_cli_report.json")
-    try:
-        report_file.write_text(
-            json.dumps(
-                {
-                    "rows": [
-                        {
-                            "provider": "openai",
-                            "source": "json",
-                            "period_start": "2026-05-01T00:00:00Z",
-                            "period_end": "2026-05-02T00:00:00Z",
-                            "period_width": "1d",
-                            "input_tokens": 100,
-                            "output_tokens": 50,
-                            "cost_source": "manual",
-                            "confidence": "medium",
-                        }
-                    ]
-                }
-            ),
-            encoding="utf-8",
-        )
-
-        exit_code = main(["preview", str(report_file)])
-
-        assert exit_code == 0
-        output = capsys.readouterr().out
-        assert "Rows: 1" in output
-        assert "Total tokens: 150" in output
-    finally:
-        report_file.unlink(missing_ok=True)
-
-
 def test_cli_help_uses_collector_program_name(capsys):
     with pytest.raises(SystemExit) as exc:
         main(["--help"])
@@ -51,168 +19,6 @@ def test_cli_help_uses_collector_program_name(capsys):
     assert exc.value.code == 0
     output = capsys.readouterr().out
     assert output.startswith("usage: silver-usage-collector")
-
-
-def test_cli_preview_csv_validates_csv_report_file(capsys):
-    report_file = Path(".tmp_cli_report.csv")
-    try:
-        report_file.write_text(
-            "provider,source,period_start,period_end,period_width,input_tokens,output_tokens,cost_source,confidence\n"
-            "openai,csv,2026-05-01T00:00:00Z,2026-05-02T00:00:00Z,1d,100,50,manual,medium\n",
-            encoding="utf-8",
-        )
-
-        exit_code = main(["preview-csv", str(report_file)])
-
-        assert exit_code == 0
-        output = capsys.readouterr().out
-        assert "Rows: 1" in output
-        assert "Total tokens: 150" in output
-    finally:
-        report_file.unlink(missing_ok=True)
-
-
-def test_cli_submit_requires_yes_confirmation(capsys):
-    report_file = Path(".tmp_cli_submit.json")
-    try:
-        report_file.write_text(
-            json.dumps(
-                {
-                    "rows": [
-                        {
-                            "provider": "openai",
-                            "source": "json",
-                            "period_start": "2026-05-01T00:00:00Z",
-                            "period_end": "2026-05-02T00:00:00Z",
-                            "period_width": "1d",
-                            "total_tokens": 150,
-                            "cost_source": "manual",
-                            "confidence": "medium",
-                        }
-                    ]
-                }
-            ),
-            encoding="utf-8",
-        )
-
-        exit_code = main(
-            [
-                "submit",
-                "--session",
-                "session_123",
-                "--file",
-                str(report_file),
-                "--base-url",
-                "http://localhost:8000",
-            ]
-        )
-
-        assert exit_code == 2
-        assert "Refusing to submit without --yes" in capsys.readouterr().out
-    finally:
-        report_file.unlink(missing_ok=True)
-
-
-def test_cli_submit_previews_then_posts_report(capsys):
-    report_file = Path(".tmp_cli_submit.json")
-    calls: list[tuple[str, str, dict]] = []
-    try:
-        report_file.write_text(
-            json.dumps(
-                {
-                    "rows": [
-                        {
-                            "provider": "openai",
-                            "source": "json",
-                            "period_start": "2026-05-01T00:00:00Z",
-                            "period_end": "2026-05-02T00:00:00Z",
-                            "period_width": "1d",
-                            "total_tokens": 150,
-                            "cost_source": "manual",
-                            "confidence": "medium",
-                        }
-                    ]
-                }
-            ),
-            encoding="utf-8",
-        )
-
-        def fake_post(url: str, payload: dict) -> dict:
-            calls.append((url, payload["method"], payload["json"]))
-            return {"status": "ok"}
-
-        with patch("cli.main._post_json", side_effect=fake_post):
-            exit_code = main(
-                [
-                    "submit",
-                    "--session",
-                    "session_123",
-                    "--file",
-                    str(report_file),
-                    "--base-url",
-                    "http://localhost:8000",
-                    "--yes",
-                ]
-            )
-
-        assert exit_code == 0
-        assert calls[0][0].endswith("/api/usage-report/sessions/session_123/preview")
-        assert calls[1][0].endswith("/api/usage-report/sessions/session_123/submit")
-        assert calls[1][2]["user_confirmation"]["preview_shown"] is True
-        assert "Submitted report for session session_123" in capsys.readouterr().out
-    finally:
-        report_file.unlink(missing_ok=True)
-
-
-def test_cli_submit_accepts_interactive_confirmation(capsys):
-    report_file = Path(".tmp_cli_submit_interactive.json")
-    calls: list[tuple[str, str, dict]] = []
-    try:
-        report_file.write_text(
-            json.dumps(
-                {
-                    "rows": [
-                        {
-                            "provider": "openai",
-                            "source": "json",
-                            "period_start": "2026-05-01T00:00:00Z",
-                            "period_end": "2026-05-02T00:00:00Z",
-                            "period_width": "1d",
-                            "total_tokens": 150,
-                            "cost_source": "manual",
-                            "confidence": "medium",
-                        }
-                    ]
-                }
-            ),
-            encoding="utf-8",
-        )
-
-        def fake_post(url: str, payload: dict) -> dict:
-            calls.append((url, payload["method"], payload["json"]))
-            return {"status": "ok"}
-
-        with (
-            patch("builtins.input", return_value="y"),
-            patch("cli.main._post_json", side_effect=fake_post),
-        ):
-            exit_code = main(
-                [
-                    "submit",
-                    "--session",
-                    "session_123",
-                    "--file",
-                    str(report_file),
-                    "--base-url",
-                    "http://localhost:8000",
-                ]
-            )
-
-        assert exit_code == 0
-        assert len(calls) == 2
-        assert "Submit this report to Silver? [y/N]" in capsys.readouterr().out
-    finally:
-        report_file.unlink(missing_ok=True)
 
 
 def test_cli_preview_codex_reads_explicit_logs_db(capsys):
@@ -377,6 +183,8 @@ def test_cli_submit_codex_requires_yes_confirmation(capsys):
                 "submit-codex",
                 "--session",
                 "session_123",
+                "--token",
+                "token_123",
                 "--logs-db",
                 str(db_path),
                 "--base-url",
@@ -408,6 +216,8 @@ def test_cli_submit_codex_previews_then_posts_report(capsys):
                     "submit-codex",
                     "--session",
                     "session_123",
+                    "--token",
+                    "token_123",
                     "--logs-db",
                     str(db_path),
                     "--base-url",
@@ -417,9 +227,9 @@ def test_cli_submit_codex_previews_then_posts_report(capsys):
             )
 
         assert exit_code == 0
-        assert calls[0][0].endswith("/api/usage-report/sessions/session_123/preview")
+        assert calls[0][0].endswith("/api/usage-report/sessions/session_123/preview?token=token_123")
         assert calls[0][2]["rows"][0]["source"] == "codex_local_telemetry"
-        assert calls[1][0].endswith("/api/usage-report/sessions/session_123/submit")
+        assert calls[1][0].endswith("/api/usage-report/sessions/session_123/submit?token=token_123")
         assert "Submitted Codex local telemetry for session session_123" in capsys.readouterr().out
     finally:
         connection.close()
@@ -452,6 +262,50 @@ def test_cli_post_json_identifies_itself_to_http_proxies():
     assert captured["user_agent"] == "silver-usage-report-cli/0.1"
     assert captured["accept"] == "application/json"
     assert captured["timeout"] == 30
+
+
+def test_cli_post_json_signs_private_session_payloads():
+    captured = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    def fake_urlopen(http_request, timeout):
+        captured["headers"] = dict(http_request.header_items())
+        captured["body"] = http_request.data
+        return FakeResponse()
+
+    with patch("cli.main.request.urlopen", side_effect=fake_urlopen):
+        result = cli_main._post_json(
+            "https://example.test/api?token=token_123",
+            {"method": "POST", "json": {"rows": []}},
+        )
+
+    timestamp = captured["headers"]["X-silver-timestamp"]
+    signature = captured["headers"]["X-silver-signature"]
+
+    assert result == {}
+    assert timestamp.isdigit()
+    expected = hmac.new(
+        b"token_123",
+        timestamp.encode("utf-8") + b"." + captured["body"],
+        hashlib.sha256,
+    ).hexdigest()
+    assert signature == expected
+
+
+def test_cli_redacts_private_token_from_error_urls():
+    redacted = cli_main._redact_url_token("https://example.test/api?token=secret-token&x=1")
+
+    assert "secret-token" not in redacted
+    assert "token=%5BREDACTED%5D" in redacted
 
 
 def test_cli_post_json_reports_network_errors():

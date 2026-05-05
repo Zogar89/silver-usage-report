@@ -13,15 +13,15 @@ def _row() -> UsageReportRow:
     return UsageReportRow(
         provider="openai",
         tool="codex",
-        source="manual",
+        source="codex_local_telemetry",
         period_start="2026-05-01T00:00:00Z",
         period_end="2026-05-02T00:00:00Z",
         period_width="1d",
         input_tokens=100,
         output_tokens=50,
         total_tokens=150,
-        cost_source="manual",
-        confidence="low",
+        cost_source="unknown",
+        confidence="medium",
     )
 
 
@@ -34,7 +34,7 @@ def test_report_session_preview_persists_across_database_sessions():
             db,
             session,
             rows=[_row()],
-            warnings=[ReportWarning(code="manual_data", message="Manual data is lower confidence.")],
+            warnings=[ReportWarning(code="codex_local_data", message="Codex local telemetry.")],
         )
         session_id = session.id
 
@@ -45,7 +45,7 @@ def test_report_session_preview_persists_across_database_sessions():
         assert loaded.status == "previewed"
         assert len(loaded.rows) == 1
         assert loaded.rows[0].total_tokens == 150
-        assert loaded.warnings[0].code == "manual_data"
+        assert loaded.warnings[0].code == "codex_local_data"
 
 
 def test_delete_report_session_data_persists_empty_report():

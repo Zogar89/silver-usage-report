@@ -22,28 +22,44 @@
     <p class="muted">Guardamos este acceso en este navegador. Si cambias de navegador o limpias datos del sitio, necesitas conservar el link privado.</p>
   </section>
 
-  <section class="two-column">
-    <div class="stack">
-      <section class="panel command-panel">
-        <div class="panel-heading">
-          <p class="eyebrow">Camino principal</p>
-          <h2>Importacion con agente local</h2>
-        </div>
-        <p>Ejecuta este comando en PowerShell. Descarga el collector y lo ejecuta desde una carpeta temporal. Lee solo telemetria agregada de uso de Codex, previsualiza los totales, pide confirmacion y envia el reporte a Silver.</p>
-        <label>
-          Comando automatico para Windows
-          <textarea class="command-box" rows="3" readonly>{{ codex_cli_command }}</textarea>
-        </label>
-        <ul class="check-list compact">
-          <li>La previsualizacion ocurre antes del envio.</li>
-          <li>No se envian prompts, respuestas, codigo fuente, logs crudos, variables de entorno ni API keys.</li>
-          <li>La pantalla se actualiza sola cuando el collector envia los datos.</li>
-        </ul>
-      </section>
+  <section class="panel command-panel">
+    <div class="panel-heading">
+      <p class="eyebrow">Camino principal</p>
+      <h2>Collector local de Codex</h2>
     </div>
-
-    {% include "_session_preview_panel.html" %}
+    <p>Corre este comando en PowerShell. Silver sirve un script liviano para esta sesion: no instala nada, no descarga .exe y trabaja solo con telemetria agregada local. Despues de confirmar el envio, esta pagina se actualiza sola en unos segundos y vas a poder ver los insights de los datos reportados.</p>
+    <label>
+      <span class="command-header">
+        <span>Comando PowerShell</span>
+        <span class="command-actions">
+          <button class="small-button secondary" type="button" data-copy-target="codex-command">Copiar comando</button>
+          <span class="copy-status" aria-live="polite" data-copy-status></span>
+          <span class="waiting-data" data-waiting-data hidden>Esperando recepcion de datos...</span>
+        </span>
+      </span>
+      <textarea id="codex-command" class="command-box" rows="3" readonly>{{ codex_cli_command }}</textarea>
+    </label>
+    <ol class="flow-steps">
+      <li>Busca datos agregados de Codex de los ultimos 90 dias.</li>
+      <li>Muestra una previsualizacion local en PowerShell sin enviar datos.</li>
+      <li>Solo si confirmas, envia el reporte a Silver y esta pagina se abre sola en la ficha final.</li>
+    </ol>
+    <ul class="check-list compact">
+      <li>No se envian prompts, respuestas, codigo fuente, logs crudos, variables de entorno ni API keys.</li>
+      <li>Si el script falla, puede enviar un diagnostico tecnico minimo a Silver para mejorar el collector.</li>
+      <li>La pantalla se actualiza sola unos segundos despues de recibir la data.</li>
+      <li>La ficha final muestra insights sobre volumen, frecuencia y composicion del uso reportado.</li>
+    </ul>
   </section>
+
+  {% if session.status in ["draft", "previewed"] %}
+    <div
+      aria-hidden="true"
+      hx-get="/reports/sessions/{{ session.id }}/report-redirect?token={{ management_token }}"
+      hx-trigger="every 3s"
+      hx-swap="none"
+    ></div>
+  {% endif %}
   {% if management_url %}
     <script>
       (function () {
@@ -72,4 +88,56 @@
       })();
     </script>
   {% endif %}
+  <script>
+    (function () {
+      var copyButton = document.querySelector("[data-copy-target='codex-command']");
+      if (!copyButton) {
+        return;
+      }
+      var target = document.getElementById(copyButton.getAttribute("data-copy-target"));
+      var status = document.querySelector("[data-copy-status]");
+      var waitingMessage = document.querySelector("[data-waiting-data]");
+      var timer;
+
+      function setStatus(message) {
+        if (!status) {
+          return;
+        }
+        window.clearTimeout(timer);
+        status.textContent = message;
+        timer = window.setTimeout(function () {
+          status.textContent = "";
+        }, 1800);
+      }
+
+      function fallbackCopy() {
+        target.focus();
+        target.select();
+        document.execCommand("copy");
+        showWaitingMessage();
+        setStatus("Copiado");
+      }
+
+      function showWaitingMessage() {
+        if (waitingMessage) {
+          waitingMessage.hidden = false;
+        }
+      }
+
+      copyButton.addEventListener("click", function () {
+        if (!target) {
+          return;
+        }
+        showWaitingMessage();
+        var command = target.value;
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(command).then(function () {
+            setStatus("Copiado");
+          }).catch(fallbackCopy);
+          return;
+        }
+        fallbackCopy();
+      });
+    })();
+  </script>
 {% endblock %}

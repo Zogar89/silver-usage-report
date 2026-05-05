@@ -36,6 +36,11 @@ class ReportSessionModel(Base):
         cascade="all, delete-orphan",
         order_by="ReportWarningModel.id",
     )
+    collector_diagnostics: Mapped[list["CollectorDiagnosticModel"]] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="CollectorDiagnosticModel.id",
+    )
 
 
 class UsageReportRowModel(Base):
@@ -79,3 +84,23 @@ class ReportWarningModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     session: Mapped[ReportSessionModel] = relationship(back_populates="warnings")
+
+
+class CollectorDiagnosticModel(Base):
+    __tablename__ = "collector_diagnostics"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    report_session_id: Mapped[str] = mapped_column(ForeignKey("report_sessions.id"), index=True)
+    stage: Mapped[str] = mapped_column(String(120), nullable=False)
+    error_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    solution_hint: Mapped[str | None] = mapped_column(Text, nullable=True)
+    collector_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    powershell_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    os: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    sessions_dir_status: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    rollout_file_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    context_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    session: Mapped[ReportSessionModel] = relationship(back_populates="collector_diagnostics")

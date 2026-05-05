@@ -20,9 +20,6 @@ silver-usage-report = "cli.main:main"
 silver-usage-collector = "cli.main:main"
 
 [project.optional-dependencies]
-collector = [
-  "pyinstaller>=6.13.0",
-]
 dev = [
   "httpx>=0.28.0",
   "pytest>=9.0.0",
@@ -34,5 +31,8 @@ testpaths = ["tests"]
 pythonpath = ["."]
 
 [tool.setuptools.packages.find]
-include = ["app*", "cli*", "mcp_server*"]
+include = ["app*", "cli*"]
 exclude = ["tests*", "docs*", "packaging*"]
+
+[tool.setuptools.package-data]
+app = ["data/*.json"]

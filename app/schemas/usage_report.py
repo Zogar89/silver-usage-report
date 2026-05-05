@@ -22,13 +22,6 @@ class Tool(StrEnum):
 
 class ReportSource(StrEnum):
     CODEX_LOCAL_TELEMETRY = "codex_local_telemetry"
-    TOOL_STATS_PASTE = "tool_stats_paste"
-    LOCAL_LOG = "local_log"
-    CSV = "csv"
-    JSON = "json"
-    MANUAL = "manual"
-    SCREENSHOT_OCR = "screenshot_ocr"
-    RESPONSE_LOG = "response_log"
 
 
 class PeriodWidth(StrEnum):
@@ -43,7 +36,6 @@ class CostSource(StrEnum):
     PROVIDER_ACTUAL = "provider_actual"
     PROVIDER_REPORT = "provider_report"
     ESTIMATED = "estimated"
-    MANUAL = "manual"
     UNKNOWN = "unknown"
 
 
@@ -61,6 +53,10 @@ class EvidenceMetadata(BaseModel):
     row_count: int | None = Field(default=None, ge=0)
     dedupe_key: str | None = None
     query_fingerprint: str | None = None
+    model_context_window: int | None = Field(default=None, ge=0)
+    plan_type: str | None = None
+    rate_limit_primary_used_percent: float | None = Field(default=None, ge=0)
+    rate_limit_secondary_used_percent: float | None = Field(default=None, ge=0)
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -108,8 +104,6 @@ class UsageReportRow(BaseModel):
             known_parts = [part for part in parts if part is not None]
             if known_parts:
                 self.total_tokens = sum(known_parts)
-        if self.source == ReportSource.MANUAL:
-            self.confidence = Confidence.LOW
         return self
 
 

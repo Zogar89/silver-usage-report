@@ -4,78 +4,64 @@
   <section class="stack">
     <p class="eyebrow">Para Silver</p>
     <h1>Revision admin</h1>
-    <p class="lede">Panel de recoleccion para ver reportes creados, previsualizados y enviados a medida que llegan.</p>
+    <p class="lede">Lista de candidatos/reportes para revisar datos, abrir el detalle y gestionar envios.</p>
+    {% if deleted_code %}
+      <p class="notice">Reporte {{ deleted_code }} eliminado del tablero activo.</p>
+    {% endif %}
   </section>
 
-  <section class="metric-grid" aria-label="Resumen de recoleccion">
+  <section class="metric-grid" aria-label="Resumen admin">
     <div class="metric">
-      <span>Reportes en carga</span>
-      <strong>{{ dashboard.in_progress_count }}</strong>
-      <small>Borradores {{ dashboard.draft_count }} / Previsualizados {{ dashboard.previewed_count }}</small>
+      <span>Reportes activos</span>
+      <strong>{{ dashboard.report_count }}</strong>
+      <small>Cada reporte representa un candidato</small>
+    </div>
+    <div class="metric">
+      <span>Con uso cargado</span>
+      <strong>{{ dashboard.reports_with_usage }}</strong>
+      <small>Tienen filas recolectadas</small>
     </div>
     <div class="metric">
       <span>Enviados</span>
       <strong>{{ dashboard.submitted_count }}</strong>
-      <small>Eliminados {{ dashboard.deleted_count }}</small>
+      <small>{{ dashboard.pending_count }} pendientes o en preview</small>
     </div>
     <div class="metric">
-      <span>Filas recolectadas</span>
-      <strong>{{ dashboard.row_count }}</strong>
-      <small>{{ dashboard.warning_count }} advertencias</small>
+      <span>Costo estimado</span>
+      <strong>{{ dashboard.total_cost_usd | usd }}</strong>
+      <small>Segun tabla local OpenAI</small>
     </div>
     <div class="metric">
-      <span>Tokens totales</span>
-      <strong>{{ dashboard.total_tokens }}</strong>
-      <small>Ultima actividad {{ dashboard.latest_activity or "Sin actividad" }}</small>
+      <span>Ultima actividad</span>
+      <strong>{{ dashboard.latest_activity | date_short if dashboard.latest_activity else "-" }}</strong>
+      <small>Ultima actividad {{ dashboard.latest_activity | datetime_short if dashboard.latest_activity else "Sin actividad" }}</small>
     </div>
   </section>
 
   <section class="panel table-wrap admin-table">
     <div class="panel-heading split-heading">
       <div>
-        <p class="eyebrow">Reportes</p>
-        <h2>Actividad reciente</h2>
+        <p class="eyebrow">Candidatos</p>
+        <h2>Reportes recientes</h2>
       </div>
-      <p class="muted">Borradores, previsualizaciones y envios aparecen en la misma cola.</p>
+      <p class="muted">Las metricas de uso estan dentro del detalle de cada reporte.</p>
     </div>
 
-    {% if reports %}
-      <table>
-        <thead>
-          <tr>
-            <th>Codigo</th>
-            <th>Estado</th>
-            <th>Candidato</th>
-            <th>Reportero</th>
-            <th>Filas</th>
-            <th>Tokens</th>
-            <th>Advertencias</th>
-            <th>Actualizado</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for report in reports %}
-          <tr>
-            <td><a href="/admin/reports/{{ report.id }}">{{ report.public_code }}</a></td>
-            <td><span class="status-pill status-{{ report.status }}">{{ report.status }}</span></td>
-            <td>{{ report.candidate_ref or "Sin informar" }}</td>
-            <td>
-              <strong>{{ report.reporter_label or "Sin nombre" }}</strong>
-              <span class="subtle-line">{{ report.reporter_email or report.github_handle or "Sin contacto" }}</span>
-            </td>
-            <td>{{ report.row_count }}</td>
-            <td>{{ report.total_tokens }}</td>
-            <td>{{ report.warnings | length }}</td>
-            <td>{{ report.submitted_at or report.created_at or "No enviado" }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <div class="empty-state">
-        <h2>No hay reportes todavia</h2>
-        <p>Cuando alguien cree una sesion o ejecute el collector, va a aparecer aca.</p>
-      </div>
-    {% endif %}
+    <form class="admin-controls" method="get" action="/admin/reports"
+      hx-get="/admin/reports"
+      hx-target="#admin-report-results"
+      hx-trigger="input changed delay:300ms, search, submit"
+      hx-push-url="true">
+      <label>
+        Buscar
+        <input name="q" value="{{ report_page.query or '' }}" type="search" placeholder="codigo, candidato, email, GitHub, estado...">
+      </label>
+      <input type="hidden" name="per_page" value="{{ report_page.per_page }}">
+      <button class="secondary" type="submit">Buscar</button>
+    </form>
+
+    <div id="admin-report-results">
+      {% include "_admin_reports_results.html" %}
+    </div>
   </section>
 {% endblock %}

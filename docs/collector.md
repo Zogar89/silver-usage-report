@@ -1,69 +1,102 @@
-# Standalone Collector
+# Collector PowerShell
 
-El collector standalone es el camino recomendado para candidatos que no tienen
-Python instalado. Es un binario por sistema operativo que reutiliza el mismo
-entrypoint del CLI (`cli.main`) y corre una sola vez: lee fuentes locales
-soportadas, muestra una previsualizacion, pide confirmacion y envia solo filas
-agregadas a Silver.
-
-## Uso para candidatos
-
-Windows, desde la pagina de sesion:
+El camino candidato actual no usa binario. La pagina de sesion sirve un
+`collector.ps1` generado para esa sesion:
 
 ```powershell
-irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1" | iex
+irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1?token=PRIVATE_TOKEN" | iex
 ```
 
-Ese script descarga `silver-usage-collector.exe` a `$env:TEMP` y lo ejecuta con
-la sesion correcta. El collector muestra una previsualizacion y pide
-confirmacion antes de subir datos.
+El script corre una sola vez, usa solo PowerShell y APIs del sistema, lee
+`$env:USERPROFILE\.codex\sessions`, muestra un resumen agregado local, pide
+confirmacion y solo entonces envia filas normalizadas firmadas a Silver.
 
-Windows, ejecucion manual:
+## Por Que No Hay `.exe`
+
+Empaquetar Python con PyInstaller produce un runtime demasiado grande para esta
+tarea. Incluso optimizado, el binario seguia pesando varios MB y podia quedar
+cacheado/desactualizado en el servidor o en `%TEMP%`.
+
+El script PowerShell evita esos problemas:
+
+- No descarga binarios.
+- No requiere Python.
+- No deja un ejecutable temporal.
+- Es auditable en texto plano.
+- Se actualiza con cada deploy web.
+
+## Datos Que Lee
+
+Fuente primaria:
 
 ```powershell
-.\silver-usage-collector.exe submit-codex --session SESSION_ID --sessions-dir "$env:USERPROFILE\.codex\sessions" --days 30 --base-url https://open.silver.dev
+$env:USERPROFILE\.codex\sessions
 ```
 
-macOS/Linux:
+El script busca `rollout-*.jsonl`, toma eventos `token_count`, asocia el modelo
+desde otros eventos metadata del mismo rollout cuando existe, agrega por
+dia/modelo los ultimos 90 dias y muestra una previsualizacion local en
+PowerShell. Si el usuario confirma, envia solo metricas agregadas.
 
-```bash
-./silver-usage-collector submit-codex --session SESSION_ID --sessions-dir "$HOME/.codex/sessions" --days 30 --base-url https://open.silver.dev
+La telemetria local de Codex no trae costo real por request o por dia. El
+collector envia tokens agregados y el servidor calcula un costo estimado con la
+tabla local `app/data/openai_model_prices.json`, preparada desde la pagina
+oficial de pricing de OpenAI.
+
+Cuando el envio termina bien, el script muestra la confirmacion del servidor,
+filas/tokens recibidos y le indica al usuario volver a la pagina donde copio el
+comando. Esa pagina queda esperando recepcion de datos, se actualiza sola y
+redirige al detalle del reporte.
+
+Si algo falla, el script imprime la etapa, el detalle del error y posibles
+soluciones: revisar la carpeta local de Codex, correr con el mismo usuario de
+Windows, verificar conectividad o crear una nueva sesion si el link expiro.
+Tambien intenta enviar a Silver un diagnostico tecnico minimo del fallo:
+
+```text
+POST /api/usage-report/sessions/{session_id}/collector-diagnostics?token=PRIVATE_TOKEN
 ```
 
-Por defecto, `preview-codex` y `submit-codex` reportan los ultimos 30 dias. Se
-puede cambiar con `--days N` o usar una fecha absoluta con `--since YYYY-MM-DD`.
+Ese diagnostico incluye etapa, mensaje de error sanitizado, version de
+PowerShell, version del collector, estado de la carpeta local y cantidad de
+rollouts detectados si se pudo calcular. No incluye prompts, respuestas, codigo
+fuente, logs crudos, variables de entorno ni API keys.
 
-La previsualizacion imprime filas agregadas por dia/modelo, requests,
-`input_tokens`, `cached_input_tokens`, `output_tokens`, `reasoning_tokens`,
-`total_tokens`, modelos principales y una serie de uso por dia. Si el usuario
-no confirma, no se sube nada.
+## Firma Del Envio
 
-## Build local
+El token privado de la sesion no se usa solo como query param. Cada POST que
+manda datos desde el collector (`submit` y `collector-diagnostics`) incluye:
 
-PyInstaller genera binarios para el sistema operativo donde corre. Para crear un
-binario local:
-
-```bash
-python -m pip install -e ".[collector]"
-python -m PyInstaller packaging/pyinstaller/silver-usage-collector.spec --noconfirm --clean
+```text
+X-Silver-Timestamp: <unix seconds>
+X-Silver-Signature: HMAC_SHA256(private_token, timestamp + "." + raw_body)
 ```
 
-Salidas esperadas:
-
-- Windows: `dist/silver-usage-collector.exe`
-- macOS/Linux: `dist/silver-usage-collector`
-
-## Release
-
-El workflow `.github/workflows/collector.yml` compila el collector en
-`windows-latest`, `macos-latest` y `ubuntu-latest`, ejecuta un smoke test con
-`--help` y sube cada binario como artifact.
+El servidor acepta timestamps dentro de una ventana de 5 minutos. Esto prueba
+posesion del token privado para esa sesion, protege la integridad del body y
+reduce replays simples. No es una prueba absoluta de que el script no fue
+copiado o reimplementado por alguien que ya tiene el token.
 
 ## Privacidad
 
-El collector no sube prompts, respuestas, codigo fuente, logs crudos, variables
-de entorno ni API keys. El adaptador de Codex usa `~/.codex/sessions` como
-fuente primaria y normaliza solo metricas agregadas de tokens.
+No se suben prompts, respuestas, codigo fuente, logs crudos, variables de
+entorno ni API keys. El script extrae solo:
 
-Los paths SQLite legacy (`--state-db`, `--logs-db`) quedan como fallback
-best-effort para entornos antiguos.
+- Provider/tool/source.
+- Periodo.
+- Modelo cuando exista.
+- Requests.
+- Tokens input/output/cache/reasoning/total.
+- Metadata de evidencia agregada, como plan, ventana de contexto y rate limits
+  cuando Codex los registra.
+
+## CLI De Desarrollo
+
+El CLI Python sigue existiendo para desarrollo y tests:
+
+```powershell
+python -m cli.main preview-codex --sessions-dir "$env:USERPROFILE\.codex\sessions"
+python -m cli.main submit-codex --session SESSION_ID --token PRIVATE_TOKEN --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url http://localhost:8002
+```
+
+No es el camino recomendado para candidatos.

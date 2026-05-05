@@ -1,301 +1,303 @@
 # Silver Usage Report
 
-Silver Usage Report is an open source intake flow for reporting AI token usage to Silver.
+Silver Usage Report es un flujo open source para que una persona reporte a Silver
+su uso agregado de herramientas de IA sin exponer prompts, respuestas, código
+fuente, logs crudos ni API keys.
 
-The goal is simple: a developer opens `open.silver.dev`, connects or imports usage from the AI tools they already use, previews exactly what will be shared, and sends Silver a normalized usage report without exposing prompts, responses, source code, raw logs, or API keys.
+El producto actual es web-first y collector-first:
 
-This is not primarily a personal spending dashboard. The first product job is to help Silver receive comparable token usage reports from many people with the lowest possible friction.
+1. La persona abre la web de Silver Usage Report.
+2. Crea una sesión privada de reporte.
+3. Copia un comando PowerShell generado para esa sesión.
+4. El collector lee telemetría local soportada, muestra una previsualización en
+   la terminal y pide confirmación.
+5. Solo después de confirmar, envía filas agregadas a Silver.
+6. La web detecta el envío, redirige al detalle del reporte y permite borrar
+   los datos agregados.
 
-## What We Learned From The X Thread
+No es un dashboard personal de gasto, un tracker permanente ni una integración
+company-wide. La primera necesidad es que Silver pueda recibir reportes
+comparables de candidatos o comunidad con la menor fricción posible.
 
-The original ask was for a "token spending tracker for Silver." The replies clarified what Silver actually needs.
+## Estado Actual
 
-People suggested existing trackers and observability tools:
+Disponible hoy:
 
-- Claude Code usage monitors.
-- TUI dashboards like `codeburn`.
-- OpenCode `/stats`.
-- AI usage products like Burntop.
-- AI gateways, SDKs, or proxy-based tracking.
+- FastAPI para API y páginas web.
+- Jinja2 + HTMX para UI server-rendered.
+- UI visible en español.
+- Sesiones privadas con `PRIVATE_TOKEN`.
+- Collector PowerShell one-shot para Codex local.
+- Preview local antes de subir datos.
+- Envío de métricas agregadas por día/modelo.
+- Firma HMAC de los POST privados del collector/CLI.
+- Diagnóstico técnico sanitizado si el collector falla.
+- Panel admin con búsqueda, paginación, edición y borrado.
+- CLI Python para desarrollo y pruebas.
+- Docker Compose con web + PostgreSQL.
 
-Those tools are useful, but they do not solve Silver's immediate problem.
+El scope actual conserva un solo camino de reporte: collector Codex local.
 
-The key constraints surfaced in the conversation:
+## Stack
 
-- Silver already tracks candidates internally.
-- Silver wants people to report their token usage.
-- Existing local trackers require users to install software.
-- Ongoing trackers only collect future data, so Silver would have to wait weeks.
-- Single-tool stats do not work for everyone.
-- Gateway or SDK tracking only works for traffic that already passes through that layer.
-- Many users do not know their own usage and estimate it by vibe.
+- Python 3.13.
+- FastAPI.
+- Jinja2.
+- HTMX.
+- Pydantic.
+- SQLAlchemy.
+- Alembic.
+- PostgreSQL en Docker.
+- SQLite como default local liviano si no se configura `DATABASE_URL`.
+- `argparse` para el CLI de desarrollo.
+- pytest.
 
-The product should therefore be a usage reporting flow, not just another tracker.
-
-## Product Thesis
-
-Silver needs a fast, trustworthy way for external users to submit AI token usage.
-
-The ideal first experience:
-
-1. User opens the Silver Usage Report web page.
-2. The page creates a short-lived report session.
-3. User picks the fastest available import method.
-4. User previews normalized metrics locally or in-browser.
-5. User confirms the report.
-6. Silver receives comparable aggregate usage data.
-
-No ongoing daemon. No month-long waiting period. No provider-specific dead end.
-
-Current scope is individual self-report. We are not building company-wide imports, team analytics, enterprise exports, or provider admin-key flows.
-
-## Technical Direction
-
-Silver Usage Report will be a Dockerized Python app:
-
-- FastAPI for web/API.
-- Jinja2 + HTMX for UI.
-- Pydantic for report schemas and validation.
-- SQLAlchemy + Alembic for persistence.
-- PostgreSQL in Docker.
-- Typer for the one-shot CLI.
-- Python MCP server for agent-assisted import.
-
-## Language Policy
-
-The web product is Spanish-first from now on. All visible UI copy, navigation,
-buttons, banners, empty states, admin labels, and reporter-facing instructions
-must be written in Spanish.
-
-Code identifiers, API fields, CLI commands, schema values, provider names, and
-third-party product names may remain in English when that is the project or
-integration contract.
-
-## Proposed MVP
-
-The first useful version should optimize for report completion:
-
-- Web report session hosted under `open.silver.dev`.
-- Short-lived report token or session code.
-- One-shot CLI/MCP helper for local tool import.
-- Codex local telemetry adapter as the first validated local-source candidate.
-- Cursor, Claude Code, and Codex as the three MVP tools.
-- Normalized report preview before submission.
-- Confidence labels for local telemetry and future supported sources.
-- Admin/review view for Silver to inspect submitted reports.
-- Deletion flow for submitted aggregate data.
-
-Enterprise/org-admin imports are out of scope for now. Anthropic's usage/cost Admin API and OpenAI organization APIs are valuable for companies, but employees usually do not have those keys or permissions. Silver Usage Report should focus on what an individual employee or community member can report from their own tools.
-
-## Privacy Promise
-
-By default, Silver Usage Report uploads only aggregate usage metrics:
-
-- Provider name
-- Tool name, when known
-- Model name, when known
-- Date or reporting period
-- Input tokens
-- Output tokens
-- Cached tokens
-- Reasoning tokens
-- Request count
-- Estimated or actual cost
-- Confidence/source metadata
-
-It must not upload:
-
-- Prompts
-- Responses
-- Conversation histories
-- Source code
-- API keys
-- Raw provider logs
-- Full file paths, unless the user explicitly opts in
-
-## Repo Structure
+## Estructura
 
 ```text
 .
 ├── app
-│   ├── main.py
+│   ├── api
+│   ├── adapters
 │   ├── core
+│   ├── db
 │   ├── schemas
 │   ├── services
 │   └── web
+├── cli
+├── docs
 ├── tests
-├── README.md
-├── CONTRIBUTING.md
 ├── Dockerfile
 ├── docker-compose.yml
-├── LICENSE
 ├── pyproject.toml
-└── docs
-    ├── architecture.md
-    ├── discovery-notes.md
-    ├── mcp-assisted-import.md
-    ├── product-spec.md
-    ├── provider-research.md
-    ├── report-flow.md
-    ├── roadmap.md
-    ├── security-privacy.md
-    └── trust-model.md
+└── README.md
 ```
 
-## Local Development
+## Desarrollo Local
 
-Run tests:
+Instalar dependencias:
+
+```bash
+python -m pip install -e ".[dev]"
+```
+
+Correr tests:
 
 ```bash
 python -m pytest
 ```
 
-The repository includes a GitHub Actions workflow at `.github/workflows/ci.yml`
-that runs the test suite and verifies the Docker build.
-
-Run the web app:
+Correr la app sin Docker:
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-Or with Docker:
+Por default, sin `.env`, la app usa SQLite en `./silver_usage_report.db`.
+
+## Desarrollo Con Docker
 
 ```bash
 docker compose up --build
 ```
 
-Docker Compose exposes the web app on `http://localhost:8002`. PostgreSQL stays
-inside the Compose network to avoid colliding with a local database on port
-`5432`. Both services define healthchecks.
+La web queda en:
 
-La revision admin esta disponible en `/admin/reports`. En desarrollo puede quedar
-abierta, pero produccion debe configurar `ADMIN_TOKEN`; las requests necesitan el
-header `x-admin-token`.
+```text
+http://localhost:8002
+```
 
-Cada sesion de reporte genera un link privado de gestion. Ese link permite al
-reportero verificar estado, filas, tokens totales y eliminar los datos agregados
-enviados. Silver puede vincular reportes con candidatos usando los campos
-opcionales `reporter_email`, `github_handle`, `x_handle`, `candidate_ref` y
-`campaign_ref`, visibles en `/admin/reports` y en el detalle admin.
+El contenedor web escucha en `8000`; Compose publica `8002:8000`. PostgreSQL
+queda dentro de la red de Compose como `db:5432` y no se publica al host.
 
-La creacion web redirige a una URL privada estable
-`/reports/sessions/SESSION_ID?token=PRIVATE_TOKEN`, asi que recargar la pagina no
-crea otra sesion. La web guarda los ultimos reportes en `localStorage` de ese
-navegador y la portada permite pegar un link privado para reabrir un reporte. Si
-el usuario cambia de navegador o borra datos del sitio, necesita conservar ese
-link privado porque no hay login de reportero.
+Comandos útiles:
 
-Initial API endpoints:
+```bash
+docker compose run --rm web pytest
+docker compose run --rm web alembic upgrade head
+docker compose logs -f web
+```
+
+## Configuración
+
+Variables principales:
+
+```text
+DATABASE_URL=postgresql+psycopg://silver:silver@db:5432/silver_usage_report
+SECRET_KEY=dev-secret-change-me
+ADMIN_TOKEN=
+APP_BASE_URL=http://localhost:8002
+ENVIRONMENT=development
+```
+
+En producción:
+
+- `ENVIRONMENT=production`.
+- `SECRET_KEY` debe ser fuerte y único.
+- `ADMIN_TOKEN` debe estar configurado.
+- `APP_BASE_URL` debe ser la URL pública real.
+- `DATABASE_URL` debe apuntar a PostgreSQL persistente.
+
+Ver [Configuración](docs/configuration.md) y [Deploy](docs/deployment.md).
+
+## Flujo Candidato
+
+La página de sesión muestra un comando con el token privado embebido:
+
+```powershell
+irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1?token=PRIVATE_TOKEN" | iex
+```
+
+El script:
+
+- lee `$env:USERPROFILE\.codex\sessions`;
+- busca `rollout-*.jsonl`;
+- toma los últimos 90 días;
+- agrega uso por día/modelo;
+- muestra requests, tokens y top models;
+- pide confirmación;
+- firma y envía el reporte confirmado;
+- intenta enviar un diagnóstico mínimo si falla.
+
+No descarga un `.exe`, no requiere Python y no instala nada permanente.
+
+## Datos Que Se Envían
+
+Solo métricas agregadas:
+
+- provider;
+- tool;
+- source;
+- modelo cuando exista;
+- período;
+- request count;
+- input/output/cached/reasoning/total tokens;
+- estimated cost and cost source;
+- confidence;
+- evidence metadata agregada.
+
+Terminología visible en la UI:
+
+- `Tokens totales`: volumen agregado reportado para el período.
+- `Input total`: input completo reportado por la telemetría.
+- `Input nuevo`: porción de input no servida desde caché.
+- `Input cacheado`: porción de input servida desde caché.
+- `Output`: tokens de salida.
+- `Razonamiento`: tokens de razonamiento cuando la telemetría los informa.
+
+Algunas tomas de telemetría pueden informar `cached_input_tokens` como subconjunto
+de `input_tokens`, mientras otras pueden informarlo como bucket separado. Para
+costos y porcentajes, la app infiere la semántica que mejor cierra contra
+`total_tokens`.
+
+OpenAI costs are estimated server-side from `app/data/openai_model_prices.json`,
+which is prepared from the official OpenAI API pricing page and can be updated
+when new models or prices are published.
+
+No se envían:
+
+- prompts;
+- respuestas;
+- conversaciones;
+- código fuente;
+- logs crudos;
+- API keys;
+- variables de entorno;
+- rutas locales completas.
+
+## API
+
+Los endpoints de sesión requieren `token=PRIVATE_TOKEN` excepto la creación.
+Los POST privados que aceptan datos (`preview`, `submit` y
+`collector-diagnostics`) además requieren firma HMAC del body con ese token:
+headers `X-Silver-Timestamp` y `X-Silver-Signature`. La ventana aceptada es de
+5 minutos para reducir replay.
+
+La creación de sesiones aplica un límite de 5 reportes por candidato cuando hay
+identificadores comparables (`candidate_ref`, email, GitHub, X o nombre).
 
 ```text
 POST   /api/usage-report/sessions
-GET    /api/usage-report/sessions/{session_id}
+GET    /api/usage-report/sessions/{session_id}?token=PRIVATE_TOKEN
 GET    /api/usage-report/sessions/{session_id}/status?token=PRIVATE_TOKEN
-POST   /api/usage-report/sessions/{session_id}/preview
-POST   /api/usage-report/sessions/{session_id}/preview/csv
-POST   /api/usage-report/sessions/{session_id}/submit
-DELETE /api/usage-report/sessions/{session_id}
+POST   /api/usage-report/sessions/{session_id}/preview?token=PRIVATE_TOKEN
+POST   /api/usage-report/sessions/{session_id}/submit?token=PRIVATE_TOKEN
+POST   /api/usage-report/sessions/{session_id}/collector-diagnostics?token=PRIVATE_TOKEN
+DELETE /api/usage-report/sessions/{session_id}?token=PRIVATE_TOKEN
 ```
 
-Preview a local JSON report file for development/import testing:
+Rutas web principales:
 
-```bash
-python -m cli.main preview report.json
+```text
+GET  /
+POST /reports/sessions
+POST /reports/sessions/open
+GET  /reports/sessions/{session_id}?token=PRIVATE_TOKEN
+GET  /reports/sessions/{session_id}/collector.ps1?token=PRIVATE_TOKEN
+GET  /reports/sessions/{session_id}/report?token=PRIVATE_TOKEN
+GET  /reports/sessions/{session_id}/status?token=PRIVATE_TOKEN
+GET  /admin
+GET  /admin/reports
+GET  /admin/reports/{session_id}
 ```
 
-Preview a local CSV report file for development/import testing:
+## CLI De Desarrollo
 
-```bash
-python -m cli.main preview-csv report.csv
-```
+El CLI Python es para desarrollo y pruebas del collector Codex. No es el camino
+recomendado para candidatos.
 
-Preview Codex local usage from session JSONL files:
+Preview Codex local:
 
 ```powershell
-python -m cli.main preview-codex --sessions-dir "$env:USERPROFILE\.codex\sessions"
+python -m cli.main preview-codex --sessions-dir "$env:USERPROFILE\.codex\sessions" --days 90
 ```
 
-The same command is available in the standalone collector binary, so candidates
-do not need Python installed:
+Submit Codex:
 
 ```powershell
-.\silver-usage-collector.exe preview-codex --sessions-dir "$env:USERPROFILE\.codex\sessions" --days 30
+python -m cli.main submit-codex --session SESSION_ID --token PRIVATE_TOKEN --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url http://localhost:8002
 ```
 
-Submit a local JSON report after explicit confirmation in development:
+## Admin
 
-```bash
-python -m cli.main submit --session SESSION_ID --file report.json --base-url http://localhost:8002 --yes
+En desarrollo, `/admin/reports` puede quedar abierto si `ADMIN_TOKEN` está vacío.
+
+En producción, `ADMIN_TOKEN` es obligatorio. El admin puede autenticarse desde
+`/admin` y usar cookie HTTP-only, o llamar rutas admin con:
+
+```text
+x-admin-token: ADMIN_TOKEN
 ```
 
-Submit Codex local telemetry after an interactive preview and confirmation:
+El panel admin permite revisar reportes, filtrar/paginar, ver detalle, editar
+identidad de candidato/campaña y borrar datos de un reporte.
 
-```powershell
-python -m cli.main submit-codex --session SESSION_ID --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url http://localhost:8002
-```
+Las métricas de uso viven en el detalle de cada reporte/candidato. La lista
+admin queda para búsqueda, paginación, estado y acciones operativas.
 
-For candidates, prefer the standalone collector:
+El detalle muestra métricas agregadas, desglose por tipo de token y serie diaria.
+La métrica principal de intensidad es `Tokens por día activo`, calculada como
+tokens totales divididos por días con uso. No debe interpretarse como tamaño de
+una request individual. Las fechas con hora se muestran en horario de Argentina.
 
-```powershell
-irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1" | iex
-```
+## Documentación
 
-The Windows script downloads the collector to a temporary path and runs it for
-the current report session. Manual binary execution is still supported with
-`.\silver-usage-collector.exe submit-codex ...`.
+- [Flujo de reporte](docs/report-flow.md).
+- [Collector PowerShell](docs/collector.md).
+- [Arquitectura](docs/architecture.md).
+- [Arquitectura técnica](docs/technical-architecture.md).
+- [Configuración](docs/configuration.md).
+- [Deploy](docs/deployment.md).
+- [Seguridad y privacidad](docs/security-privacy.md).
+- [Trust model](docs/trust-model.md).
+- [Roadmap](docs/roadmap.md).
 
-Build the local collector binary for the current OS:
+## CI
 
-```bash
-python -m pip install -e ".[collector]"
-python -m PyInstaller packaging/pyinstaller/silver-usage-collector.spec --noconfirm --clean
-```
+GitHub Actions corre:
 
-The binary is written to `dist/silver-usage-collector` on macOS/Linux and
-`dist/silver-usage-collector.exe` on Windows. PyInstaller builds for the host OS,
-so release binaries are produced by `.github/workflows/collector.yml` on Windows,
-macOS, and Linux runners.
-
-Agent-assisted imports should use the prompt template at `mcp_server/prompts/agent-assisted-import.md`.
-
-The web session page presents a one-line Windows command that downloads and runs
-the standalone Codex collector. Manual, CSV, and JSON web fallbacks are not part
-of the current candidate-facing flow.
-
-Codex collector reports default to the last 30 days and aggregate usage by
-day/model. The preview shows request count, input tokens, cached input tokens,
-output tokens, reasoning tokens, total tokens, and top models before asking for
-confirmation.
-
-Codex SQLite sources such as `state_5.sqlite` and `logs_2.sqlite` are treated as
-legacy best-effort fallbacks because their local schema is not documented as a
-stable public contract.
-
-## Candidate Collector Flow
-
-```bash
-silver-usage-collector submit-codex --session SESSION_ID --base-url https://open.silver.dev
-```
-
-Expected flow:
-
-1. The web app shows a report session code or deep link.
-2. The user downloads the collector binary for their OS.
-3. The collector detects supported local sources.
-4. The collector normalizes the last 30 days into daily/model aggregate rows.
-5. The collector previews request and token breakdowns before anything is sent.
-6. The user confirms upload.
-7. The web report session updates immediately.
-
-## Key Design Documents
-
-- [Report flow](docs/report-flow.md): web-first MVP, no required reporter login, collector-first import, and Silver review.
-- [Standalone collector](docs/collector.md): candidate binary usage, local build, release workflow, and privacy notes.
-- [MCP-assisted import](docs/mcp-assisted-import.md): prompt + MCP flow for local agents like Codex or Claude Code.
-- [Technical architecture](docs/technical-architecture.md): Docker, FastAPI, Jinja2, HTMX, database, CLI, and MCP layout.
-- [Trust model](docs/trust-model.md): source, confidence, evidence, validation, and anti-hallucination rules.
-- [Discovery notes](docs/discovery-notes.md): decisions from the X thread, Deel context, Codex local telemetry finding, and scope cuts.
+- `python -m pytest`.
+- `docker compose build`.
 
 ## Links
 

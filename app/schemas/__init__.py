@@ -1,1 +1,1 @@
-"""Pydantic schemas shared by web, API, CLI, and MCP surfaces."""
+"""Pydantic schemas shared by web, API, and CLI surfaces."""

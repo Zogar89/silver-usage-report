@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
 {% block content %}
-  <section class="stack hero">
+  <section class="stack hero home-hero">
     <p class="eyebrow">Para talento</p>
     <h1>Silver Usage Report</h1>
     <p class="lede">Envia metricas agregadas de uso de IA a Silver sin compartir prompts, respuestas, codigo, logs ni claves.</p>
     <div class="actions">
-      <form class="identity-form" method="post" action="/reports/sessions">
-        <div class="field-grid">
+      <form class="identity-form home-identity-form" method="post" action="/reports/sessions">
+        <div class="field-grid home-field-grid">
           <label>
             Nombre o etiqueta
             <input name="reporter_label" autocomplete="name">
@@ -82,11 +82,56 @@
         if (!report || !report.url) {
           return;
         }
+        var row = document.createElement("div");
+        row.className = "saved-report-row";
         var link = document.createElement("a");
         link.href = report.url;
         link.className = "saved-report-item";
         link.innerHTML = "<strong>" + (report.publicCode || report.id) + "</strong><span>" + (report.status || "draft") + "</span>";
-        list.appendChild(link);
+        var deleteButton = document.createElement("button");
+        deleteButton.className = "danger small-button";
+        deleteButton.type = "button";
+        deleteButton.textContent = "Borrar";
+        deleteButton.addEventListener("click", function () {
+          if (!window.confirm("Borrar los datos del reporte " + (report.publicCode || report.id) + "?")) {
+            return;
+          }
+          var reportUrl;
+          try {
+            reportUrl = new URL(report.url, window.location.origin);
+          } catch (error) {
+            return;
+          }
+          var pathParts = reportUrl.pathname.split("/").filter(Boolean);
+          var sessionIndex = pathParts.indexOf("sessions");
+          var sessionId = sessionIndex >= 0 ? pathParts[sessionIndex + 1] : "";
+          var token = reportUrl.searchParams.get("token");
+          if (!sessionId || !token) {
+            return;
+          }
+          deleteButton.disabled = true;
+          fetch("/reports/sessions/" + encodeURIComponent(sessionId) + "/delete?token=" + encodeURIComponent(token), {
+            method: "POST"
+          }).then(function (response) {
+            if (!response.ok) {
+              throw new Error("delete failed");
+            }
+            reports = reports.filter(function (item) {
+              return item && item.id !== report.id;
+            });
+            localStorage.setItem("silverUsageReports", JSON.stringify(reports));
+            row.remove();
+            if (!list.children.length) {
+              container.innerHTML = '<p class="muted">' + container.dataset.emptyText + '</p>';
+            }
+          }).catch(function () {
+            deleteButton.disabled = false;
+            window.alert("No se pudo borrar el reporte. Proba abriendolo con el link privado.");
+          });
+        });
+        row.appendChild(link);
+        row.appendChild(deleteButton);
+        list.appendChild(row);
       });
       container.replaceChildren(list);
     })();
