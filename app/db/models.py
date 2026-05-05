@@ -17,7 +17,6 @@ class ReportSessionModel(Base):
     private_token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     reporter_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     reporter_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    github_handle: Mapped[str | None] = mapped_column(String(120), nullable=True)
     x_handle: Mapped[str | None] = mapped_column(String(120), nullable=True)
     candidate_ref: Mapped[str | None] = mapped_column(String(120), index=True, nullable=True)
     campaign_ref: Mapped[str | None] = mapped_column(String(120), index=True, nullable=True)

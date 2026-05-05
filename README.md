@@ -214,7 +214,7 @@ headers `X-Silver-Timestamp` y `X-Silver-Signature`. La ventana aceptada es de
 5 minutos para reducir replay.
 
 La creación de sesiones aplica un límite de 5 reportes por candidato cuando hay
-identificadores comparables (`candidate_ref`, email, GitHub, X o nombre).
+identificadores comparables (`candidate_ref`, email, X o nombre).
 
 ```text
 POST   /api/usage-report/sessions

@@ -35,7 +35,6 @@ MAX_REPORT_WARNINGS = 100
 class CreateReportSessionRequest(BaseModel):
     reporter_label: str | None = Field(default=None, max_length=255)
     reporter_email: str | None = Field(default=None, max_length=255)
-    github_handle: str | None = Field(default=None, max_length=120)
     x_handle: str | None = Field(default=None, max_length=120)
     candidate_ref: str | None = Field(default=None, max_length=120)
     campaign_ref: str | None = Field(default=None, max_length=120)
@@ -101,7 +100,6 @@ def create_usage_report_session(
             db,
             reporter_label=payload.reporter_label,
             reporter_email=payload.reporter_email,
-            github_handle=payload.github_handle,
             x_handle=payload.x_handle,
             candidate_ref=payload.candidate_ref,
             campaign_ref=payload.campaign_ref,

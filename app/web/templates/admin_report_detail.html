@@ -50,8 +50,6 @@
         <dd>{{ session.reporter_label or "Sin informar" }}</dd>
         <dt>Email</dt>
         <dd>{{ session.reporter_email or "Sin informar" }}</dd>
-        <dt>GitHub</dt>
-        <dd>{{ session.github_handle or "Sin informar" }}</dd>
         <dt>X</dt>
         <dd>{{ session.x_handle or "Sin informar" }}</dd>
         <dt>Candidato</dt>
@@ -167,10 +165,6 @@
           <label>
             Email
             <input name="reporter_email" type="email" value="{{ session.reporter_email or '' }}" autocomplete="email">
-          </label>
-          <label>
-            GitHub
-            <input name="github_handle" value="{{ session.github_handle or '' }}" autocomplete="off">
           </label>
           <label>
             X
@@ -300,6 +294,19 @@
             const [, month, day] = value.split("-");
             return `${day}/${month}`;
           };
+          const cssValue = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+          const chartPalette = () => ({
+            blue: cssValue("--silver-blue") || "#0066cc",
+            blueFocus: cssValue("--silver-blue-focus") || "#0071e3",
+            canvas: cssValue("--canvas") || "#ffffff",
+            ink: cssValue("--ink") || "#1d1d1f",
+            muted: cssValue("--ink-muted-48") || "#7a7a7a",
+            hairline: cssValue("--hairline") || "#e0e0e0",
+            output: cssValue("--chart-output") || "#1d1d1f",
+            tooltip: cssValue("--tooltip-bg") || "#1d1d1f",
+            tooltipText: cssValue("--tooltip-text") || "#f5f5f7",
+          });
+          const palette = chartPalette();
 
           const usageChart = new Chart(canvas, {
             type: "bar",
@@ -309,9 +316,9 @@
                 {
                   label: "Input nuevo",
                   data: chartData.fresh_input,
-                  backgroundColor: "#2f7f8f",
-                  hoverBackgroundColor: "#276b79",
-                  borderColor: "#ffffff",
+                  backgroundColor: palette.blue,
+                  hoverBackgroundColor: palette.blueFocus,
+                  borderColor: palette.canvas,
                   borderWidth: 1,
                   borderRadius: 6,
                   borderSkipped: false,
@@ -321,9 +328,9 @@
                 {
                   label: "Input cacheado",
                   data: chartData.cache,
-                  backgroundColor: "#c8912b",
-                  hoverBackgroundColor: "#aa7721",
-                  borderColor: "#ffffff",
+                  backgroundColor: "#86868b",
+                  hoverBackgroundColor: "#6e6e73",
+                  borderColor: palette.canvas,
                   borderWidth: 1,
                   borderRadius: 6,
                   borderSkipped: false,
@@ -333,9 +340,9 @@
                 {
                   label: "Output",
                   data: chartData.output,
-                  backgroundColor: "#d16b5a",
-                  hoverBackgroundColor: "#b95545",
-                  borderColor: "#ffffff",
+                  backgroundColor: palette.output,
+                  hoverBackgroundColor: palette.ink,
+                  borderColor: palette.canvas,
                   borderWidth: 1,
                   borderRadius: 6,
                   borderSkipped: false,
@@ -345,9 +352,9 @@
                 {
                   label: "Razonamiento",
                   data: chartData.reasoning,
-                  backgroundColor: "#596371",
-                  hoverBackgroundColor: "#434b56",
-                  borderColor: "#ffffff",
+                  backgroundColor: "#2997ff",
+                  hoverBackgroundColor: palette.blueFocus,
+                  borderColor: palette.canvas,
                   borderWidth: 1,
                   borderRadius: 6,
                   borderSkipped: false,
@@ -369,8 +376,10 @@
               plugins: {
                 legend: { display: false },
                 tooltip: {
-                  backgroundColor: "#25221d",
-                  borderColor: "#ded8cd",
+                  backgroundColor: palette.tooltip,
+                  borderColor: palette.hairline,
+                  bodyColor: palette.tooltipText,
+                  titleColor: palette.tooltipText,
                   borderWidth: 1,
                   displayColors: true,
                   padding: 12,
@@ -391,15 +400,15 @@
                 x: {
                   stacked: true,
                   grid: { display: false },
-                  ticks: { color: "#5b554b", font: { size: 13, weight: "700" } },
+                  ticks: { color: palette.muted, font: { size: 13, weight: "700" } },
                 },
                 y: {
                   stacked: true,
                   beginAtZero: true,
                   border: { display: false },
-                  grid: { color: "#e9e1d6" },
+                  grid: { color: palette.hairline },
                   ticks: {
-                    color: "#6b6459",
+                    color: palette.muted,
                     padding: 8,
                     callback: (value) => compactTokens(value),
                   },

@@ -42,7 +42,6 @@ def test_create_report_session_api_returns_session_details():
         json={
             "reporter_label": "Gabriel",
             "reporter_email": "gabriel@silver.dev",
-            "github_handle": "gabriel-silver",
             "candidate_ref": "cand_123",
             "campaign_ref": "open-call-2026",
         },
@@ -55,7 +54,6 @@ def test_create_report_session_api_returns_session_details():
     assert data["private_token"]
     assert data["reporter_label"] == "Gabriel"
     assert data["reporter_email"] == "gabriel@silver.dev"
-    assert data["github_handle"] == "gabriel-silver"
     assert data["candidate_ref"] == "cand_123"
     assert data["campaign_ref"] == "open-call-2026"
     assert data["status"] == "draft"

@@ -100,7 +100,6 @@ def test_admin_review_lists_submitted_report_totals():
         json={
             "reporter_label": "Gabriel",
             "reporter_email": "gabriel@silver.dev",
-            "github_handle": "gabriel-silver",
             "candidate_ref": "cand_123",
             "campaign_ref": "open-call-2026",
         },
@@ -136,7 +135,6 @@ def test_admin_review_lists_submitted_report_totals():
 
     assert detail.status_code == 200
     assert "Detalle del reporte" in detail.text
-    assert "gabriel-silver" in detail.text
     assert "open-call-2026" in detail.text
     assert "codex_local_telemetry" in detail.text
     assert "Costo estimado" in detail.text
@@ -201,7 +199,6 @@ def test_admin_reports_paginates_and_searches_live_results():
                 json={
                     "reporter_label": f"Dev {index}",
                     "reporter_email": f"dev{index}@silver.dev",
-                    "github_handle": f"dev-{index}",
                     "candidate_ref": f"cand_page_{index}",
                 },
             ).json()
@@ -414,7 +411,6 @@ def test_admin_can_edit_candidate_data():
         content=(
             "reporter_label=New%20Name&"
             "reporter_email=new%40silver.dev&"
-            "github_handle=new-handle&"
             "x_handle=new_x&"
             "candidate_ref=cand_updated&"
             "campaign_ref=may-2026"
@@ -433,7 +429,6 @@ def test_admin_can_edit_candidate_data():
     assert "cand_updated" in response.text
     assert summary["reporter_label"] == "New Name"
     assert summary["reporter_email"] == "new@silver.dev"
-    assert summary["github_handle"] == "new-handle"
     assert summary["x_handle"] == "new_x"
     assert summary["candidate_ref"] == "cand_updated"
     assert summary["campaign_ref"] == "may-2026"

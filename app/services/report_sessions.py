@@ -51,7 +51,6 @@ class ReportSession(BaseModel):
     private_token: str | None = None
     reporter_label: str | None = None
     reporter_email: str | None = None
-    github_handle: str | None = None
     x_handle: str | None = None
     candidate_ref: str | None = None
     campaign_ref: str | None = None
@@ -79,7 +78,6 @@ class ReportSessionSummary(BaseModel):
     public_code: str
     reporter_label: str | None = None
     reporter_email: str | None = None
-    github_handle: str | None = None
     x_handle: str | None = None
     candidate_ref: str | None = None
     campaign_ref: str | None = None
@@ -110,14 +108,12 @@ def create_report_session(
     db: Session,
     reporter_label: str | None = None,
     reporter_email: str | None = None,
-    github_handle: str | None = None,
     x_handle: str | None = None,
     candidate_ref: str | None = None,
     campaign_ref: str | None = None,
 ) -> ReportSession:
     reporter_label = _clean_identifier(reporter_label)
     reporter_email = _clean_identifier(reporter_email)
-    github_handle = _clean_identifier(github_handle)
     x_handle = _clean_identifier(x_handle)
     candidate_ref = _clean_identifier(candidate_ref)
     campaign_ref = _clean_identifier(campaign_ref)
@@ -125,7 +121,6 @@ def create_report_session(
         db,
         reporter_label=reporter_label,
         reporter_email=reporter_email,
-        github_handle=github_handle,
         x_handle=x_handle,
         candidate_ref=candidate_ref,
     )
@@ -137,7 +132,6 @@ def create_report_session(
         private_token_hash=_hash_token(private_token),
         reporter_label=reporter_label,
         reporter_email=reporter_email,
-        github_handle=github_handle,
         x_handle=x_handle,
         candidate_ref=candidate_ref,
         campaign_ref=campaign_ref,
@@ -198,7 +192,6 @@ def list_report_sessions_page(
                 ReportSessionModel.campaign_ref.ilike(pattern),
                 ReportSessionModel.reporter_label.ilike(pattern),
                 ReportSessionModel.reporter_email.ilike(pattern),
-                ReportSessionModel.github_handle.ilike(pattern),
                 ReportSessionModel.x_handle.ilike(pattern),
                 ReportSessionModel.status.ilike(pattern),
             )
@@ -228,7 +221,6 @@ def summarize_report_session(session: ReportSession) -> ReportSessionSummary:
         public_code=session.public_code,
         reporter_label=session.reporter_label,
         reporter_email=session.reporter_email,
-        github_handle=session.github_handle,
         x_handle=session.x_handle,
         candidate_ref=session.candidate_ref,
         campaign_ref=session.campaign_ref,
@@ -298,7 +290,6 @@ def update_report_session_identity(
     session: ReportSession,
     reporter_label: str | None = None,
     reporter_email: str | None = None,
-    github_handle: str | None = None,
     x_handle: str | None = None,
     candidate_ref: str | None = None,
     campaign_ref: str | None = None,
@@ -306,7 +297,6 @@ def update_report_session_identity(
     session_model = _require_session_model(db, session.id)
     session_model.reporter_label = reporter_label
     session_model.reporter_email = reporter_email
-    session_model.github_handle = github_handle
     session_model.x_handle = x_handle
     session_model.candidate_ref = candidate_ref
     session_model.campaign_ref = campaign_ref
@@ -369,14 +359,12 @@ def _ensure_candidate_session_limit(
     *,
     reporter_label: str | None,
     reporter_email: str | None,
-    github_handle: str | None,
     x_handle: str | None,
     candidate_ref: str | None,
 ) -> None:
     filters = []
     for column, value in (
         (ReportSessionModel.candidate_ref, candidate_ref),
-        (ReportSessionModel.github_handle, github_handle),
         (ReportSessionModel.reporter_email, reporter_email),
         (ReportSessionModel.x_handle, x_handle),
         (ReportSessionModel.reporter_label, reporter_label),
@@ -426,7 +414,6 @@ def _to_report_session(
         private_token=private_token,
         reporter_label=session_model.reporter_label,
         reporter_email=session_model.reporter_email,
-        github_handle=session_model.github_handle,
         x_handle=session_model.x_handle,
         candidate_ref=session_model.candidate_ref,
         campaign_ref=session_model.campaign_ref,
