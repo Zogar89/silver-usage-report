@@ -60,6 +60,25 @@ def test_home_page_uses_spanish_copy_and_language_attribute():
     assert "For Talent" not in html
 
 
+def test_report_status_page_requires_private_token_and_shows_management_actions():
+    client = TestClient(app)
+    response = client.post("/reports/sessions")
+    session_id = _session_id_from(response.text)
+    token_marker = 'data-private-token="'
+    token_start = response.text.index(token_marker) + len(token_marker)
+    token_end = response.text.index('"', token_start)
+    private_token = response.text[token_start:token_end]
+
+    denied = client.get(f"/reports/sessions/{session_id}/status")
+    allowed = client.get(f"/reports/sessions/{session_id}/status", params={"token": private_token})
+
+    assert denied.status_code == 401
+    assert allowed.status_code == 200
+    assert "Estado del reporte" in allowed.text
+    assert "Codigo de sesion" in allowed.text
+    assert "Eliminar datos del reporte" in allowed.text
+
+
 def test_manual_web_flow_previews_submits_and_deletes_report():
     client = TestClient(app)
     response = client.post("/reports/sessions")

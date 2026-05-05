@@ -28,7 +28,16 @@ def _create_session(client: TestClient) -> dict[str, object]:
 def test_create_report_session_api_returns_session_details():
     client = TestClient(app)
 
-    response = client.post("/api/usage-report/sessions", json={"reporter_label": "Gabriel"})
+    response = client.post(
+        "/api/usage-report/sessions",
+        json={
+            "reporter_label": "Gabriel",
+            "reporter_email": "gabriel@silver.dev",
+            "github_handle": "gabriel-silver",
+            "candidate_ref": "cand_123",
+            "campaign_ref": "open-call-2026",
+        },
+    )
 
     assert response.status_code == 201
     data = response.json()
@@ -36,6 +45,10 @@ def test_create_report_session_api_returns_session_details():
     assert len(data["public_code"]) == 6
     assert data["private_token"]
     assert data["reporter_label"] == "Gabriel"
+    assert data["reporter_email"] == "gabriel@silver.dev"
+    assert data["github_handle"] == "gabriel-silver"
+    assert data["candidate_ref"] == "cand_123"
+    assert data["campaign_ref"] == "open-call-2026"
     assert data["status"] == "draft"
 
 
@@ -51,6 +64,25 @@ def test_get_report_session_api_returns_private_session_summary_without_token():
     assert data["public_code"] == session["public_code"]
     assert data["status"] == "draft"
     assert "private_token" not in data
+
+
+def test_get_private_report_status_requires_management_token():
+    client = TestClient(app)
+    session = _create_session(client)
+
+    denied = client.get(f"/api/usage-report/sessions/{session['id']}/status")
+    allowed = client.get(
+        f"/api/usage-report/sessions/{session['id']}/status",
+        params={"token": session["private_token"]},
+    )
+
+    assert denied.status_code == 401
+    assert allowed.status_code == 200
+    data = allowed.json()
+    assert data["id"] == session["id"]
+    assert data["management_url"].endswith(
+        f"/reports/sessions/{session['id']}/status?token={session['private_token']}"
+    )
 
 
 def test_preview_report_rows_updates_session_status_and_totals():

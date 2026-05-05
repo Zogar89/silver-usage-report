@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="stack">
+    <p class="eyebrow">Para Silver</p>
+    <h1>Detalle del reporte</h1>
+    <p class="lede">Datos agregados y vinculacion del reporte enviado.</p>
+  </section>
+
+  <section class="two-column">
+    <div class="panel">
+      <div class="panel-heading">
+        <p class="eyebrow">Candidato</p>
+        <h2>Vinculacion</h2>
+      </div>
+      <dl>
+        <dt>Codigo</dt>
+        <dd>{{ session.public_code }}</dd>
+        <dt>Nombre</dt>
+        <dd>{{ session.reporter_label or "Sin informar" }}</dd>
+        <dt>Email</dt>
+        <dd>{{ session.reporter_email or "Sin informar" }}</dd>
+        <dt>GitHub</dt>
+        <dd>{{ session.github_handle or "Sin informar" }}</dd>
+        <dt>X</dt>
+        <dd>{{ session.x_handle or "Sin informar" }}</dd>
+        <dt>Candidato</dt>
+        <dd>{{ session.candidate_ref or "Sin informar" }}</dd>
+        <dt>Campaña</dt>
+        <dd>{{ session.campaign_ref or "Sin informar" }}</dd>
+      </dl>
+    </div>
+
+    <aside class="panel">
+      <div class="panel-heading">
+        <p class="eyebrow">Resumen</p>
+        <h2>Uso reportado</h2>
+      </div>
+      <dl>
+        <dt>Estado</dt>
+        <dd>{{ session.status }}</dd>
+        <dt>Filas</dt>
+        <dd>{{ summary.row_count }}</dd>
+        <dt>Tokens totales</dt>
+        <dd>{{ summary.total_tokens }}</dd>
+        <dt>Enviado</dt>
+        <dd>{{ summary.submitted_at or "No enviado" }}</dd>
+      </dl>
+    </aside>
+  </section>
+
+  <section class="panel table-wrap">
+    <h2>Filas</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Proveedor</th>
+          <th>Herramienta</th>
+          <th>Fuente</th>
+          <th>Tokens</th>
+          <th>Confianza</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in summary.rows %}
+          <tr>
+            <td>{{ row.provider }}</td>
+            <td>{{ row.tool or "other" }}</td>
+            <td>{{ row.source }}</td>
+            <td>{{ row.total_tokens or 0 }}</td>
+            <td>{{ row.confidence }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endblock %}

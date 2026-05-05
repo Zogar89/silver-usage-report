@@ -13,6 +13,8 @@
         <tr>
           <th>Codigo</th>
           <th>Estado</th>
+          <th>Candidato</th>
+          <th>Email</th>
           <th>Filas</th>
           <th>Tokens totales</th>
           <th>Enviado</th>
@@ -21,8 +23,10 @@
       <tbody>
         {% for report in reports %}
           <tr>
-            <td>{{ report.public_code }}</td>
+            <td><a href="/admin/reports/{{ report.id }}">{{ report.public_code }}</a></td>
             <td>{{ report.status }}</td>
+            <td>{{ report.candidate_ref or "Sin informar" }}</td>
+            <td>{{ report.reporter_email or "Sin informar" }}</td>
             <td>{{ report.row_count }}</td>
             <td>{{ report.total_tokens }}</td>
             <td>{{ report.submitted_at or "No enviado" }}</td>

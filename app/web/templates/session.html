@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-  <section class="stack" data-session-id="{{ session.id }}">
+  <section class="stack" data-session-id="{{ session.id }}" data-private-token="{{ session.private_token or '' }}">
     <p class="eyebrow">Carga de uso</p>
     <h1>Sesion de reporte</h1>
     {% if banner %}
@@ -13,6 +13,10 @@
         <dd>{{ session.public_code }}</dd>
         <dt>Estado</dt>
         <dd>{{ session.status }}</dd>
+        {% if management_url %}
+          <dt>Link privado</dt>
+          <dd><a href="{{ management_url }}">Ver estado y administrar reporte</a></dd>
+        {% endif %}
       </dl>
     </div>
   </section>

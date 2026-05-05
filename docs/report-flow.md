@@ -45,11 +45,47 @@ The report session can collect optional identity fields when Silver needs them:
 - Email.
 - X handle.
 - GitHub handle.
+- Candidate reference.
+- Campaign reference.
 - Freeform label.
 
 These fields should be optional unless a specific Silver campaign requires them.
 
 Silver admins need login to review submitted reports. Reporters do not.
+
+## Reporter Status And Management
+
+When a session is created, the reporter receives a private management link. That
+link is the reporter's proof and control surface for the report.
+
+The status page shows:
+
+- Session code.
+- Current state: draft, previewed, submitted, or deleted.
+- Row count and total tokens.
+- Submitted timestamp.
+- Candidate/campaign linkage fields that were provided.
+- Delete action for the submitted aggregate data.
+
+The private management link must include a token. The public session id or
+public code alone must not allow report deletion or private status access.
+
+## Candidate Linkage
+
+Silver links usage reports to its candidate records through optional metadata
+collected at session creation:
+
+- `reporter_label`
+- `reporter_email`
+- `github_handle`
+- `x_handle`
+- `candidate_ref`
+- `campaign_ref`
+
+For open calls and campaigns, Silver should prefer campaign-specific links that
+pre-fill `campaign_ref` or `candidate_ref`. The reporter can still submit
+without login, but the admin review view must expose these fields for matching
+and reconciliation.
 
 ## MVP User Flow
 
@@ -156,6 +192,7 @@ Silver needs an internal review view for submitted reports.
 It should show:
 
 - Reporter label or anonymous/private link.
+- Reporter email, GitHub, X, candidate ref, and campaign ref when present.
 - Period.
 - Provider/tool/model breakdown.
 - Total tokens.

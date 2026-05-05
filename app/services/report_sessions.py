@@ -15,6 +15,11 @@ class ReportSession(BaseModel):
     public_code: str
     private_token: str | None = None
     reporter_label: str | None = None
+    reporter_email: str | None = None
+    github_handle: str | None = None
+    x_handle: str | None = None
+    candidate_ref: str | None = None
+    campaign_ref: str | None = None
     status: str = "draft"
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime
@@ -26,15 +31,30 @@ class ReportSession(BaseModel):
 class ReportSessionSummary(BaseModel):
     id: str
     public_code: str
+    reporter_label: str | None = None
+    reporter_email: str | None = None
+    github_handle: str | None = None
+    x_handle: str | None = None
+    candidate_ref: str | None = None
+    campaign_ref: str | None = None
     status: str
     row_count: int
     total_tokens: int
     rows: list[UsageReportRow]
     warnings: list[ReportWarning]
     submitted_at: datetime | None = None
+    management_url: str | None = None
 
 
-def create_report_session(db: Session, reporter_label: str | None = None) -> ReportSession:
+def create_report_session(
+    db: Session,
+    reporter_label: str | None = None,
+    reporter_email: str | None = None,
+    github_handle: str | None = None,
+    x_handle: str | None = None,
+    candidate_ref: str | None = None,
+    campaign_ref: str | None = None,
+) -> ReportSession:
     created_at = datetime.now(UTC)
     private_token = token_urlsafe(32)
     session_model = ReportSessionModel(
@@ -42,6 +62,11 @@ def create_report_session(db: Session, reporter_label: str | None = None) -> Rep
         public_code=token_urlsafe(8)[:6].upper(),
         private_token_hash=_hash_token(private_token),
         reporter_label=reporter_label,
+        reporter_email=reporter_email,
+        github_handle=github_handle,
+        x_handle=x_handle,
+        candidate_ref=candidate_ref,
+        campaign_ref=campaign_ref,
         status="draft",
         created_at=created_at,
         expires_at=created_at + timedelta(hours=24),
@@ -59,6 +84,15 @@ def get_report_session(db: Session, session_id: str) -> ReportSession | None:
     return _to_report_session(session_model)
 
 
+def get_report_session_for_management(db: Session, session_id: str, private_token: str) -> ReportSession | None:
+    session_model = db.get(ReportSessionModel, session_id)
+    if session_model is None:
+        return None
+    if session_model.private_token_hash != _hash_token(private_token):
+        return None
+    return _to_report_session(session_model, private_token=private_token)
+
+
 def list_report_sessions(db: Session) -> list[ReportSessionSummary]:
     session_models = (
         db.query(ReportSessionModel)
@@ -72,6 +106,12 @@ def summarize_report_session(session: ReportSession) -> ReportSessionSummary:
     return ReportSessionSummary(
         id=session.id,
         public_code=session.public_code,
+        reporter_label=session.reporter_label,
+        reporter_email=session.reporter_email,
+        github_handle=session.github_handle,
+        x_handle=session.x_handle,
+        candidate_ref=session.candidate_ref,
+        campaign_ref=session.campaign_ref,
         status=session.status,
         row_count=len(session.rows),
         total_tokens=sum(row.total_tokens or 0 for row in session.rows),
@@ -142,6 +182,11 @@ def _to_report_session(
         public_code=session_model.public_code,
         private_token=private_token,
         reporter_label=session_model.reporter_label,
+        reporter_email=session_model.reporter_email,
+        github_handle=session_model.github_handle,
+        x_handle=session_model.x_handle,
+        candidate_ref=session_model.candidate_ref,
+        campaign_ref=session_model.campaign_ref,
         status=session_model.status,
         created_at=_as_utc(session_model.created_at),
         expires_at=_as_utc(session_model.expires_at),

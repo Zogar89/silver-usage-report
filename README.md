@@ -175,11 +175,18 @@ La revision admin esta disponible en `/admin/reports`. En desarrollo puede queda
 abierta, pero produccion debe configurar `ADMIN_TOKEN`; las requests necesitan el
 header `x-admin-token`.
 
+Cada sesion de reporte genera un link privado de gestion. Ese link permite al
+reportero verificar estado, filas, tokens totales y eliminar los datos agregados
+enviados. Silver puede vincular reportes con candidatos usando los campos
+opcionales `reporter_email`, `github_handle`, `x_handle`, `candidate_ref` y
+`campaign_ref`, visibles en `/admin/reports` y en el detalle admin.
+
 Initial API endpoints:
 
 ```text
 POST   /api/usage-report/sessions
 GET    /api/usage-report/sessions/{session_id}
+GET    /api/usage-report/sessions/{session_id}/status?token=PRIVATE_TOKEN
 POST   /api/usage-report/sessions/{session_id}/preview
 POST   /api/usage-report/sessions/{session_id}/preview/csv
 POST   /api/usage-report/sessions/{session_id}/submit

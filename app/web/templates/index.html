@@ -6,7 +6,25 @@
     <h1>Silver Usage Report</h1>
     <p class="lede">Envia metricas agregadas de uso de IA a Silver sin compartir prompts, respuestas, codigo, logs ni claves.</p>
     <div class="actions">
-      <form method="post" action="/reports/sessions">
+      <form class="identity-form" method="post" action="/reports/sessions">
+        <div class="field-grid">
+          <label>
+            Nombre o etiqueta
+            <input name="reporter_label" autocomplete="name">
+          </label>
+          <label>
+            Email
+            <input name="reporter_email" type="email" autocomplete="email">
+          </label>
+          <label>
+            GitHub
+            <input name="github_handle" autocomplete="username">
+          </label>
+          <label>
+            Referencia de candidato
+            <input name="candidate_ref">
+          </label>
+        </div>
         <button type="submit">Enviar reporte</button>
       </form>
     </div>

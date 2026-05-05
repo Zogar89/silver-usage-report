@@ -135,7 +135,15 @@ Secondary users:
 7. Silver receives aggregate report data.
 8. User can delete the submitted report.
 
-Reporter login is not required for the MVP. The report session should use a short code and private link. Silver admins need login for the internal review view.
+Reporter login is not required for the MVP. The report session should use a short code and private management link. Silver admins need login for the internal review view.
+
+The private management link lets the reporter verify submission status, inspect
+aggregate totals, and delete submitted aggregate data. It must require the
+private token generated at session creation.
+
+Silver links reports to candidates through optional identity metadata collected
+at session creation: name/label, email, GitHub handle, X handle, candidate ref,
+and campaign ref. These fields are visible in admin review and detail pages.
 
 ## MVP Screens
 
@@ -148,6 +156,8 @@ Reporter login is not required for the MVP. The report session should use a shor
 - Report preview table.
 - Confirmation screen.
 - Silver admin report review.
+- Silver admin report detail.
+- Reporter private status/management page.
 - Data deletion page.
 
 ## Web Design Direction

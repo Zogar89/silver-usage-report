@@ -106,6 +106,8 @@ The web app serves:
 - Confirmation page.
 - Delete report page.
 - Silver admin review pages.
+- Reporter private status/management page.
+- Silver admin detail page for candidate linkage.
 
 The web interface must match the existing Open Silver site at `https://open.silver.dev/`. Templates and CSS should be treated as an extension of that site: reuse the same brand feel, navigation structure, link/product-card conventions, spacing, typography, and restrained visual style before adding any new component patterns.
 
@@ -132,6 +134,7 @@ Initial endpoints:
 ```text
 POST   /api/usage-report/sessions
 GET    /api/usage-report/sessions/{session_id}
+GET    /api/usage-report/sessions/{session_id}/status?token=PRIVATE_TOKEN
 POST   /api/usage-report/sessions/{session_id}/preview
 POST   /api/usage-report/sessions/{session_id}/submit
 DELETE /api/usage-report/sessions/{session_id}
@@ -152,6 +155,11 @@ report_sessions
 - public_code
 - private_token_hash
 - reporter_label nullable
+- reporter_email nullable
+- github_handle nullable
+- x_handle nullable
+- candidate_ref nullable
+- campaign_ref nullable
 - status
 - created_at
 - expires_at

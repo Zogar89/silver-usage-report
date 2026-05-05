@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -10,9 +10,11 @@ from app.services.report_sessions import (
     ReportSessionSummary,
     create_report_session,
     delete_report_session_data,
+    get_report_session_for_management,
     get_report_session,
     preview_report_session,
     submit_report_session,
+    summarize_report_session,
 )
 
 router = APIRouter(prefix="/api/usage-report", tags=["usage-report"])
@@ -20,6 +22,11 @@ router = APIRouter(prefix="/api/usage-report", tags=["usage-report"])
 
 class CreateReportSessionRequest(BaseModel):
     reporter_label: str | None = None
+    reporter_email: str | None = None
+    github_handle: str | None = None
+    x_handle: str | None = None
+    candidate_ref: str | None = None
+    campaign_ref: str | None = None
 
 
 class PreviewReportRequest(BaseModel):
@@ -36,7 +43,15 @@ def create_usage_report_session(
     payload: CreateReportSessionRequest,
     db: Session = Depends(get_db),
 ) -> ReportSession:
-    return create_report_session(db, reporter_label=payload.reporter_label)
+    return create_report_session(
+        db,
+        reporter_label=payload.reporter_label,
+        reporter_email=payload.reporter_email,
+        github_handle=payload.github_handle,
+        x_handle=payload.x_handle,
+        candidate_ref=payload.candidate_ref,
+        campaign_ref=payload.campaign_ref,
+    )
 
 
 @router.get("/sessions/{session_id}", response_model=ReportSessionSummary)
@@ -48,6 +63,12 @@ def get_usage_report_session(
     return ReportSessionSummary(
         id=session.id,
         public_code=session.public_code,
+        reporter_label=session.reporter_label,
+        reporter_email=session.reporter_email,
+        github_handle=session.github_handle,
+        x_handle=session.x_handle,
+        candidate_ref=session.candidate_ref,
+        campaign_ref=session.campaign_ref,
         status=session.status,
         row_count=len(session.rows),
         total_tokens=sum(row.total_tokens or 0 for row in session.rows),
@@ -55,6 +76,23 @@ def get_usage_report_session(
         warnings=session.warnings,
         submitted_at=session.submitted_at,
     )
+
+
+@router.get("/sessions/{session_id}/status", response_model=ReportSessionSummary)
+def get_private_usage_report_status(
+    session_id: str,
+    request: Request,
+    token: str | None = None,
+    db: Session = Depends(get_db),
+) -> ReportSessionSummary:
+    if not token:
+        raise HTTPException(status_code=401, detail="management token required")
+    session = get_report_session_for_management(db, session_id, token)
+    if session is None:
+        raise HTTPException(status_code=401, detail="invalid management token")
+    summary = summarize_report_session(session)
+    summary.management_url = _management_url(request, session.id, token)
+    return summary
 
 
 @router.post("/sessions/{session_id}/preview", response_model=ReportSessionSummary)
@@ -107,3 +145,8 @@ def _get_session_or_404(db: Session, session_id: str) -> ReportSession:
     if session is None:
         raise HTTPException(status_code=404, detail="report session not found")
     return session
+
+
+def _management_url(request: Request, session_id: str, token: str) -> str:
+    base_url = str(request.base_url).rstrip("/")
+    return f"{base_url}/reports/sessions/{session_id}/status?token={token}"

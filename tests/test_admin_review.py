@@ -40,7 +40,16 @@ def test_admin_review_requires_token_in_production_even_when_unset():
 
 def test_admin_review_lists_submitted_report_totals():
     client = TestClient(app)
-    session = client.post("/api/usage-report/sessions", json={}).json()
+    session = client.post(
+        "/api/usage-report/sessions",
+        json={
+            "reporter_label": "Gabriel",
+            "reporter_email": "gabriel@silver.dev",
+            "github_handle": "gabriel-silver",
+            "candidate_ref": "cand_123",
+            "campaign_ref": "open-call-2026",
+        },
+    ).json()
     row = {
         "provider": "openai",
         "tool": "codex",
@@ -75,3 +84,13 @@ def test_admin_review_lists_submitted_report_totals():
     assert session["public_code"] in response.text
     assert "submitted" in response.text
     assert "150" in response.text
+    assert "cand_123" in response.text
+    assert "gabriel@silver.dev" in response.text
+
+    detail = client.get(f"/admin/reports/{session['id']}")
+
+    assert detail.status_code == 200
+    assert "Detalle del reporte" in detail.text
+    assert "gabriel-silver" in detail.text
+    assert "open-call-2026" in detail.text
+    assert "manual" in detail.text

@@ -16,6 +16,7 @@ from app.services.report_sessions import (
     ReportSessionSummary,
     create_report_session,
     delete_report_session_data,
+    get_report_session_for_management,
     get_report_session,
     list_report_sessions,
     preview_report_session,
@@ -37,11 +38,20 @@ def index(request: Request) -> HTMLResponse:
 
 
 @router.post("/reports/sessions", response_class=HTMLResponse)
-def start_report_session(
+async def start_report_session(
     request: Request,
     db: Session = Depends(get_db),
 ) -> HTMLResponse:
-    session = create_report_session(db)
+    form = _parse_urlencoded_form(await request.body())
+    session = create_report_session(
+        db,
+        reporter_label=_blank_to_none(form.get("reporter_label")),
+        reporter_email=_blank_to_none(form.get("reporter_email")),
+        github_handle=_blank_to_none(form.get("github_handle")),
+        x_handle=_blank_to_none(form.get("x_handle")),
+        candidate_ref=_blank_to_none(form.get("candidate_ref")),
+        campaign_ref=_blank_to_none(form.get("campaign_ref")),
+    )
     return _render_session(request, session)
 
 
@@ -128,6 +138,58 @@ def delete_manual_report_session(
     return _render_session(request, session, summary=summary, banner="Reporte eliminado")
 
 
+@router.get("/reports/sessions/{session_id}/status", response_class=HTMLResponse)
+def report_session_status(
+    session_id: str,
+    request: Request,
+    token: str | None = None,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    if not token:
+        raise HTTPException(status_code=401, detail="management token required")
+    session = get_report_session_for_management(db, session_id, token)
+    if session is None:
+        raise HTTPException(status_code=401, detail="invalid management token")
+    return templates.TemplateResponse(
+        request,
+        "status.html",
+        {
+            "title": "Estado del reporte",
+            "session": session,
+            "summary": summarize_report_session(session),
+            "management_token": token,
+        },
+    )
+
+
+@router.post("/reports/sessions/{session_id}/delete-managed", response_class=HTMLResponse)
+async def delete_managed_report_session(
+    session_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    form = _parse_urlencoded_form(await request.body())
+    token = form.get("token")
+    if not token:
+        raise HTTPException(status_code=401, detail="management token required")
+    session = get_report_session_for_management(db, session_id, token)
+    if session is None:
+        raise HTTPException(status_code=401, detail="invalid management token")
+    summary = delete_report_session_data(db, session)
+    session = _get_session_or_404(db, session_id)
+    return templates.TemplateResponse(
+        request,
+        "status.html",
+        {
+            "title": "Estado del reporte",
+            "session": session,
+            "summary": summary,
+            "management_token": token,
+            "banner": "Reporte eliminado",
+        },
+    )
+
+
 @router.get("/admin/reports", response_class=HTMLResponse)
 def admin_reports(
     request: Request,
@@ -140,6 +202,26 @@ def admin_reports(
         request,
         "admin_reports.html",
         {"title": "Revision admin", "reports": reports},
+    )
+
+
+@router.get("/admin/reports/{session_id}", response_class=HTMLResponse)
+def admin_report_detail(
+    session_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    x_admin_token: str | None = Header(default=None),
+) -> HTMLResponse:
+    _require_admin_token(x_admin_token)
+    session = _get_session_or_404(db, session_id)
+    return templates.TemplateResponse(
+        request,
+        "admin_report_detail.html",
+        {
+            "title": "Detalle del reporte",
+            "session": session,
+            "summary": summarize_report_session(session),
+        },
     )
 
 
@@ -174,6 +256,7 @@ def _render_session(
             "summary": summary or summarize_report_session(session),
             "banner": banner,
             "codex_cli_command": codex_cli_command,
+            "management_url": _management_url(request, session),
         },
     )
 
@@ -213,3 +296,17 @@ def _optional_int(value) -> int | None:
     if value in (None, ""):
         return None
     return int(value)
+
+
+def _blank_to_none(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def _management_url(request: Request, session: ReportSession) -> str | None:
+    if not session.private_token:
+        return None
+    base_url = str(request.base_url).rstrip("/")
+    return f"{base_url}/reports/sessions/{session.id}/status?token={session.private_token}"
