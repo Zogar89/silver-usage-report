@@ -37,17 +37,20 @@ SQLite files remain best-effort fallbacks only.
 Collector preview:
 
 ```powershell
-.\silver-usage-collector.exe preview-codex --sessions-dir "$env:USERPROFILE\.codex\sessions"
+.\silver-usage-collector.exe preview-codex --sessions-dir "$env:USERPROFILE\.codex\sessions" --days 30
 ```
 
 Collector submit:
 
 ```powershell
-.\silver-usage-collector.exe submit-codex --session SESSION_ID --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url https://open.silver.dev
+irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1" | iex
 ```
 
 The Python CLI exposes the same commands for development, but candidates should
 use the standalone collector binary when possible.
+
+Collector rows are daily/model aggregates for the selected period. The default
+period is the last 30 days and can be changed with `--days` or `--since`.
 
 The legacy SQLite adapter can query `state_5.sqlite` thread rollups, or
 `logs_2.sqlite` rows that match:

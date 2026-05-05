@@ -28,6 +28,10 @@
         <dd>{{ session.candidate_ref or "Sin informar" }}</dd>
         <dt>Campaña</dt>
         <dd>{{ session.campaign_ref or "Sin informar" }}</dd>
+        <dt>Creado</dt>
+        <dd>{{ session.created_at }}</dd>
+        <dt>Expira</dt>
+        <dd>{{ session.expires_at }}</dd>
       </dl>
     </div>
 
@@ -43,35 +47,93 @@
         <dd>{{ summary.row_count }}</dd>
         <dt>Tokens totales</dt>
         <dd>{{ summary.total_tokens }}</dd>
+        <dt>Advertencias</dt>
+        <dd>{{ summary.warnings | length }}</dd>
         <dt>Enviado</dt>
         <dd>{{ summary.submitted_at or "No enviado" }}</dd>
       </dl>
     </aside>
   </section>
 
-  <section class="panel table-wrap">
-    <h2>Filas</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Proveedor</th>
-          <th>Herramienta</th>
-          <th>Fuente</th>
-          <th>Tokens</th>
-          <th>Confianza</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in summary.rows %}
-          <tr>
-            <td>{{ row.provider }}</td>
-            <td>{{ row.tool or "other" }}</td>
-            <td>{{ row.source }}</td>
-            <td>{{ row.total_tokens or 0 }}</td>
-            <td>{{ row.confidence }}</td>
-          </tr>
+  {% if summary.warnings %}
+    <section class="panel warning-panel">
+      <div class="panel-heading">
+        <p class="eyebrow">Revision</p>
+        <h2>Advertencias</h2>
+      </div>
+      <ul class="warning-list">
+        {% for warning in summary.warnings %}
+          <li>
+            <strong>{{ warning.code }}</strong>
+            <span>{{ warning.message }}</span>
+            <small>{{ warning.provider or "proveedor no informado" }} / {{ warning.tool or "herramienta no informada" }}</small>
+          </li>
         {% endfor %}
-      </tbody>
-    </table>
+      </ul>
+    </section>
+  {% endif %}
+
+  <section class="panel table-wrap">
+    <div class="panel-heading">
+      <p class="eyebrow">Datos</p>
+      <h2>Senales recolectadas</h2>
+    </div>
+    {% if summary.rows %}
+      <table class="dense-table">
+        <thead>
+          <tr>
+            <th>Proveedor</th>
+            <th>Herramienta</th>
+            <th>Fuente</th>
+            <th>Modelo</th>
+            <th>Periodo</th>
+            <th>Requests</th>
+            <th>Tokens</th>
+            <th>Costo</th>
+            <th>Confianza</th>
+            <th>Evidencia</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in summary.rows %}
+            <tr>
+              <td>{{ row.provider }}</td>
+              <td>{{ row.tool or "other" }}</td>
+              <td>{{ row.source }}</td>
+              <td>{{ row.model or "Sin informar" }}</td>
+              <td>
+                <span>{{ row.period_start }}</span>
+                <span class="subtle-line">{{ row.period_end }}</span>
+              </td>
+              <td>{{ row.request_count or 0 }}</td>
+              <td>
+                <strong>{{ row.total_tokens or 0 }}</strong>
+                <span class="subtle-line">in {{ row.input_tokens or 0 }} / out {{ row.output_tokens or 0 }}</span>
+                <span class="subtle-line">cache {{ row.cached_input_tokens or 0 }} / razon {{ row.reasoning_tokens or 0 }}</span>
+              </td>
+              <td>
+                {{ row.cost_usd if row.cost_usd is not none else "Sin costo" }}
+                <span class="subtle-line">{{ row.cost_source }}</span>
+              </td>
+              <td>{{ row.confidence }}</td>
+              <td>
+                {% if row.evidence %}
+                  <span>{{ row.evidence.adapter or "Sin adapter" }}</span>
+                  <span class="subtle-line">{{ row.evidence.adapter_version or "Sin version" }}</span>
+                  <span class="subtle-line">filas base {{ row.evidence.row_count or 0 }}</span>
+                {% else %}
+                  Sin evidencia
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="empty-state">
+        <h2>Sin filas recolectadas</h2>
+        <p>La sesion existe, pero todavia no tiene preview ni envio confirmado.</p>
+      </div>
+    {% endif %}
   </section>
 {% endblock %}

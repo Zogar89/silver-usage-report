@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from urllib.parse import parse_qs
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
@@ -26,6 +26,7 @@ from app.services.report_sessions import (
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/web/templates")
+ADMIN_COOKIE_NAME = "silver_admin_token"
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -190,18 +191,67 @@ async def delete_managed_report_session(
     )
 
 
+@router.get("/reports/sessions/{session_id}/collector.ps1")
+def collector_script(session_id: str, request: Request, db: Session = Depends(get_db)) -> Response:
+    session = _get_session_or_404(db, session_id)
+    base_url = str(request.base_url).rstrip("/")
+    script = (
+        '$ErrorActionPreference = "Stop"\n'
+        '$collector = Join-Path $env:TEMP "silver-usage-collector.exe"\n'
+        f'Invoke-WebRequest -Uri "{base_url}/static/downloads/silver-usage-collector.exe" -OutFile $collector\n'
+        "& $collector submit-codex "
+        f'--session "{session.id}" '
+        '--sessions-dir "$env:USERPROFILE\\.codex\\sessions" '
+        "--days 30 "
+        f'--base-url "{base_url}"\n'
+    )
+    return Response(content=script, media_type="text/plain")
+
+
+@router.get("/admin", response_class=HTMLResponse)
+def admin_login(request: Request) -> HTMLResponse:
+    _ensure_admin_configured()
+    return templates.TemplateResponse(
+        request,
+        "admin_login.html",
+        {"title": "Entrar al panel"},
+    )
+
+
+@router.post("/admin/login")
+async def admin_login_submit(request: Request) -> RedirectResponse:
+    form = _parse_urlencoded_form(await request.body())
+    token = form.get("admin_token", "")
+    _require_admin_token_value(token)
+    response = RedirectResponse(url="/admin/reports", status_code=303)
+    settings = get_settings()
+    if settings.admin_token:
+        response.set_cookie(
+            ADMIN_COOKIE_NAME,
+            token,
+            httponly=True,
+            samesite="lax",
+            secure=settings.environment == "production",
+        )
+    return response
+
+
 @router.get("/admin/reports", response_class=HTMLResponse)
 def admin_reports(
     request: Request,
     db: Session = Depends(get_db),
     x_admin_token: str | None = Header(default=None),
 ) -> HTMLResponse:
-    _require_admin_token(x_admin_token)
+    _require_admin_token(request, x_admin_token)
     reports = list_report_sessions(db)
     return templates.TemplateResponse(
         request,
         "admin_reports.html",
-        {"title": "Revision admin", "reports": reports},
+        {
+            "title": "Revision admin",
+            "reports": reports,
+            "dashboard": _admin_dashboard(reports),
+        },
     )
 
 
@@ -212,7 +262,7 @@ def admin_report_detail(
     db: Session = Depends(get_db),
     x_admin_token: str | None = Header(default=None),
 ) -> HTMLResponse:
-    _require_admin_token(x_admin_token)
+    _require_admin_token(request, x_admin_token)
     session = _get_session_or_404(db, session_id)
     return templates.TemplateResponse(
         request,
@@ -225,13 +275,49 @@ def admin_report_detail(
     )
 
 
-def _require_admin_token(x_admin_token: str | None) -> None:
+def _ensure_admin_configured() -> None:
     settings = get_settings()
     if settings.environment == "production" and not settings.admin_token:
         raise HTTPException(status_code=503, detail="ADMIN_TOKEN must be configured in production")
+
+
+def _require_admin_token(request: Request, x_admin_token: str | None) -> None:
+    _ensure_admin_configured()
+    settings = get_settings()
     admin_token = settings.admin_token
-    if admin_token and x_admin_token != admin_token:
+    request_token = x_admin_token or request.cookies.get(ADMIN_COOKIE_NAME)
+    if admin_token and request_token != admin_token:
         raise HTTPException(status_code=401, detail="admin token required")
+
+
+def _require_admin_token_value(token: str) -> None:
+    _ensure_admin_configured()
+    admin_token = get_settings().admin_token
+    if admin_token and token != admin_token:
+        raise HTTPException(status_code=401, detail="admin token required")
+
+
+def _admin_dashboard(reports: list[ReportSessionSummary]) -> dict[str, object]:
+    draft_count = sum(1 for report in reports if report.status == "draft")
+    previewed_count = sum(1 for report in reports if report.status == "previewed")
+    submitted_count = sum(1 for report in reports if report.status == "submitted")
+    deleted_count = sum(1 for report in reports if report.status == "deleted")
+    latest_activity = max(
+        (report.submitted_at or report.created_at for report in reports if report.submitted_at or report.created_at),
+        default=None,
+    )
+    return {
+        "report_count": len(reports),
+        "draft_count": draft_count,
+        "previewed_count": previewed_count,
+        "submitted_count": submitted_count,
+        "deleted_count": deleted_count,
+        "in_progress_count": draft_count + previewed_count,
+        "row_count": sum(report.row_count for report in reports),
+        "total_tokens": sum(report.total_tokens for report in reports),
+        "warning_count": sum(len(report.warnings) for report in reports),
+        "latest_activity": latest_activity,
+    }
 
 
 def _render_session(
@@ -242,10 +328,7 @@ def _render_session(
 ) -> HTMLResponse:
     base_url = str(request.base_url).rstrip("/")
     codex_cli_command = (
-        ".\\silver-usage-collector.exe submit-codex "
-        f"--session {session.id} "
-        '--sessions-dir "$env:USERPROFILE\\.codex\\sessions" '
-        f"--base-url {base_url}"
+        f'irm "{base_url}/reports/sessions/{session.id}/collector.ps1" | iex'
     )
     return templates.TemplateResponse(
         request,

@@ -245,12 +245,16 @@ For candidates, Silver should publish standalone collector binaries built from
 the same CLI entrypoint. The web flow should prefer:
 
 ```powershell
-.\silver-usage-collector.exe submit-codex --session SESSION_ID --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url https://open.silver.dev
+irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1" | iex
 ```
 
 Python commands remain development and fallback commands. The collector binaries
 are built per operating system with PyInstaller because PyInstaller packages for
 the host OS rather than cross-compiling.
+
+Codex collector submissions default to the last 30 days and aggregate rows by
+day/model. Each row preserves request count plus input, cached input, output,
+reasoning, and total token counts.
 
 ## MCP Server
 

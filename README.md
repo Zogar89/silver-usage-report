@@ -215,7 +215,7 @@ The same command is available in the standalone collector binary, so candidates
 do not need Python installed:
 
 ```powershell
-.\silver-usage-collector.exe preview-codex --sessions-dir "$env:USERPROFILE\.codex\sessions"
+.\silver-usage-collector.exe preview-codex --sessions-dir "$env:USERPROFILE\.codex\sessions" --days 30
 ```
 
 Submit a local JSON report after explicit confirmation:
@@ -233,8 +233,12 @@ python -m cli.main submit-codex --session SESSION_ID --sessions-dir "$env:USERPR
 For candidates, prefer the standalone collector:
 
 ```powershell
-.\silver-usage-collector.exe submit-codex --session SESSION_ID --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url https://open.silver.dev
+irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1" | iex
 ```
+
+The Windows script downloads the collector to a temporary path and runs it for
+the current report session. Manual binary execution is still supported with
+`.\silver-usage-collector.exe submit-codex ...`.
 
 Build the local collector binary for the current OS:
 
@@ -250,9 +254,14 @@ macOS, and Linux runners.
 
 Agent-assisted imports should use the prompt template at `mcp_server/prompts/agent-assisted-import.md`.
 
-The web session page presents the standalone Codex collector command as the
-primary path. Manual rows plus CSV and JSON paste previews remain fallback paths
-when local telemetry is unavailable.
+The web session page presents a one-line Windows command that downloads and runs
+the standalone Codex collector. Manual rows plus CSV and JSON paste previews
+remain fallback paths when local telemetry is unavailable.
+
+Codex collector reports default to the last 30 days and aggregate usage by
+day/model. The preview shows request count, input tokens, cached input tokens,
+output tokens, reasoning tokens, total tokens, and top models before asking for
+confirmation.
 
 Codex SQLite sources such as `state_5.sqlite` and `logs_2.sqlite` are treated as
 legacy best-effort fallbacks because their local schema is not documented as a
@@ -269,8 +278,8 @@ Expected flow:
 1. The web app shows a report session code or deep link.
 2. The user downloads the collector binary for their OS.
 3. The collector detects supported local sources.
-4. The collector normalizes usage into report rows.
-5. The collector previews exactly what will be sent.
+4. The collector normalizes the last 30 days into daily/model aggregate rows.
+5. The collector previews request and token breakdowns before anything is sent.
 6. The user confirms upload.
 7. The web report session updates immediately.
 

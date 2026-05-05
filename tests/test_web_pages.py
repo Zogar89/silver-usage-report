@@ -37,12 +37,28 @@ def test_report_session_page_prioritizes_local_agent_cli_import():
     rendered_text = unescape(html)
     session_id = _session_id_from(html)
     assert "Importacion con agente local" in html
-    assert ".\\silver-usage-collector.exe submit-codex" in rendered_text
-    assert f"--session {session_id}" in html
-    assert '--sessions-dir "$env:USERPROFILE\\.codex\\sessions"' in rendered_text
-    assert "--base-url http://testserver" in html
+    assert "Comando automatico para Windows" in html
+    assert f'irm "http://testserver/reports/sessions/{session_id}/collector.ps1" | iex' in rendered_text
+    assert "Descarga el collector y lo ejecuta desde una carpeta temporal." in html
     assert "YOU" not in html
     assert html.index("Importacion con agente local") < html.index("Carga manual")
+
+
+def test_report_session_collector_script_downloads_and_runs_collector():
+    client = TestClient(app)
+    response = client.post("/reports/sessions")
+    session_id = _session_id_from(response.text)
+
+    script = client.get(f"/reports/sessions/{session_id}/collector.ps1")
+
+    assert script.status_code == 200
+    assert script.headers["content-type"].startswith("text/plain")
+    assert "Invoke-WebRequest" in script.text
+    assert "/static/downloads/silver-usage-collector.exe" in script.text
+    assert f'--session "{session_id}"' in script.text
+    assert '--sessions-dir "$env:USERPROFILE\\.codex\\sessions"' in script.text
+    assert "--days 30" in script.text
+    assert '--base-url "http://testserver"' in script.text
 
 
 def test_home_page_uses_spanish_copy_and_language_attribute():

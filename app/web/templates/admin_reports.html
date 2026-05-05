@@ -4,35 +4,78 @@
   <section class="stack">
     <p class="eyebrow">Para Silver</p>
     <h1>Revision admin</h1>
-    <p class="lede">Revisa reportes agregados de uso enviados y datos de carga etiquetados por confianza.</p>
+    <p class="lede">Panel de recoleccion para ver reportes creados, previsualizados y enviados a medida que llegan.</p>
   </section>
 
-  <section class="panel">
-    <table>
-      <thead>
-        <tr>
-          <th>Codigo</th>
-          <th>Estado</th>
-          <th>Candidato</th>
-          <th>Email</th>
-          <th>Filas</th>
-          <th>Tokens totales</th>
-          <th>Enviado</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for report in reports %}
+  <section class="metric-grid" aria-label="Resumen de recoleccion">
+    <div class="metric">
+      <span>Reportes en carga</span>
+      <strong>{{ dashboard.in_progress_count }}</strong>
+      <small>Borradores {{ dashboard.draft_count }} / Previsualizados {{ dashboard.previewed_count }}</small>
+    </div>
+    <div class="metric">
+      <span>Enviados</span>
+      <strong>{{ dashboard.submitted_count }}</strong>
+      <small>Eliminados {{ dashboard.deleted_count }}</small>
+    </div>
+    <div class="metric">
+      <span>Filas recolectadas</span>
+      <strong>{{ dashboard.row_count }}</strong>
+      <small>{{ dashboard.warning_count }} advertencias</small>
+    </div>
+    <div class="metric">
+      <span>Tokens totales</span>
+      <strong>{{ dashboard.total_tokens }}</strong>
+      <small>Ultima actividad {{ dashboard.latest_activity or "Sin actividad" }}</small>
+    </div>
+  </section>
+
+  <section class="panel table-wrap admin-table">
+    <div class="panel-heading split-heading">
+      <div>
+        <p class="eyebrow">Reportes</p>
+        <h2>Actividad reciente</h2>
+      </div>
+      <p class="muted">Borradores, previsualizaciones y envios aparecen en la misma cola.</p>
+    </div>
+
+    {% if reports %}
+      <table>
+        <thead>
+          <tr>
+            <th>Codigo</th>
+            <th>Estado</th>
+            <th>Candidato</th>
+            <th>Reportero</th>
+            <th>Filas</th>
+            <th>Tokens</th>
+            <th>Advertencias</th>
+            <th>Actualizado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for report in reports %}
           <tr>
             <td><a href="/admin/reports/{{ report.id }}">{{ report.public_code }}</a></td>
-            <td>{{ report.status }}</td>
+            <td><span class="status-pill status-{{ report.status }}">{{ report.status }}</span></td>
             <td>{{ report.candidate_ref or "Sin informar" }}</td>
-            <td>{{ report.reporter_email or "Sin informar" }}</td>
+            <td>
+              <strong>{{ report.reporter_label or "Sin nombre" }}</strong>
+              <span class="subtle-line">{{ report.reporter_email or report.github_handle or "Sin contacto" }}</span>
+            </td>
             <td>{{ report.row_count }}</td>
             <td>{{ report.total_tokens }}</td>
-            <td>{{ report.submitted_at or "No enviado" }}</td>
+            <td>{{ report.warnings | length }}</td>
+            <td>{{ report.submitted_at or report.created_at or "No enviado" }}</td>
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="empty-state">
+        <h2>No hay reportes todavia</h2>
+        <p>Cuando alguien cree una sesion o ejecute el collector, va a aparecer aca.</p>
+      </div>
+    {% endif %}
   </section>
 {% endblock %}

@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.adapters.codex_local import preview_codex_local_usage, preview_codex_sessions_usage
@@ -254,5 +255,101 @@ def test_codex_sessions_adapter_extracts_usage_from_rollout_jsonl():
         rollout_path.unlink(missing_ok=True)
         rollout_dir.rmdir()
         (sessions_dir / "2026" / "04").rmdir()
+        (sessions_dir / "2026").rmdir()
+        sessions_dir.rmdir()
+
+
+def test_codex_sessions_adapter_can_aggregate_recent_usage_by_day_and_model():
+    sessions_dir = Path(".tmp_codex_sessions_aggregate")
+    first_dir = sessions_dir / "2026" / "05" / "01"
+    second_dir = sessions_dir / "2026" / "05" / "02"
+    first_dir.mkdir(parents=True, exist_ok=True)
+    second_dir.mkdir(parents=True, exist_ok=True)
+    first_path = first_dir / "rollout-2026-05-01T10-00-00-first.jsonl"
+    second_path = first_dir / "rollout-2026-05-01T11-00-00-second.jsonl"
+    old_path = second_dir / "rollout-2026-05-02T10-00-00-old.jsonl"
+    try:
+        first_path.write_text(
+            json.dumps(
+                {
+                    "timestamp": "2026-05-01T10:00:00Z",
+                    "model": "gpt-5.5",
+                    "payload": {
+                        "type": "token_count",
+                        "info": {
+                            "total_token_usage": {
+                                "input_tokens": 100,
+                                "cached_input_tokens": 20,
+                                "output_tokens": 50,
+                                "reasoning_output_tokens": 5,
+                                "total_tokens": 175,
+                            }
+                        },
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        second_path.write_text(
+            json.dumps(
+                {
+                    "timestamp": "2026-05-01T11:00:00Z",
+                    "model": "gpt-5.5",
+                    "payload": {
+                        "type": "token_count",
+                        "info": {
+                            "total_token_usage": {
+                                "input_tokens": 200,
+                                "output_tokens": 25,
+                                "total_tokens": 225,
+                            }
+                        },
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        old_path.write_text(
+            json.dumps(
+                {
+                    "timestamp": "2026-04-01T10:00:00Z",
+                    "model": "gpt-5.5",
+                    "payload": {
+                        "type": "token_count",
+                        "info": {"total_token_usage": {"input_tokens": 999, "total_tokens": 999}},
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        rows, warnings = preview_codex_sessions_usage(
+            sessions_dir,
+            since=datetime(2026, 4, 15, tzinfo=UTC),
+            aggregate=True,
+        )
+
+        assert warnings == []
+        assert len(rows) == 1
+        assert rows[0].period_width == "1d"
+        assert rows[0].period_start.isoformat() == "2026-05-01T00:00:00+00:00"
+        assert rows[0].period_end.isoformat() == "2026-05-02T00:00:00+00:00"
+        assert rows[0].model == "gpt-5.5"
+        assert rows[0].request_count == 2
+        assert rows[0].input_tokens == 300
+        assert rows[0].cached_input_tokens == 20
+        assert rows[0].output_tokens == 75
+        assert rows[0].reasoning_tokens == 5
+        assert rows[0].total_tokens == 400
+        assert rows[0].evidence is not None
+        assert rows[0].evidence.row_count == 2
+        assert rows[0].evidence.query_fingerprint == "codex_sessions_daily_model_usage_v1"
+    finally:
+        first_path.unlink(missing_ok=True)
+        second_path.unlink(missing_ok=True)
+        old_path.unlink(missing_ok=True)
+        first_dir.rmdir()
+        second_dir.rmdir()
+        (sessions_dir / "2026" / "05").rmdir()
         (sessions_dir / "2026").rmdir()
         sessions_dir.rmdir()

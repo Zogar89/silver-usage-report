@@ -1,7 +1,7 @@
 import argparse
 import json
 from pathlib import Path
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Sequence
 from urllib import error, request
 
@@ -32,6 +32,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     preview_codex.add_argument("--sessions-dir", type=Path)
     preview_codex.add_argument("--state-db", type=Path)
     preview_codex.add_argument("--logs-db", type=Path)
+    preview_codex.add_argument("--days", type=int, default=30)
+    preview_codex.add_argument("--since")
 
     submit = subcommands.add_parser("submit", help="Preview and submit a JSON report to a session.")
     submit.add_argument("--session", required=True)
@@ -48,6 +50,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     submit_codex.add_argument("--state-db", type=Path)
     submit_codex.add_argument("--logs-db", type=Path)
     submit_codex.add_argument("--base-url", default="http://localhost:8000")
+    submit_codex.add_argument("--days", type=int, default=30)
+    submit_codex.add_argument("--since")
     submit_codex.add_argument("--yes", action="store_true")
 
     args = parser.parse_args(argv)
@@ -56,11 +60,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "preview-csv":
         return _preview_csv(args.file)
     if args.command == "preview-codex":
-        return _preview_codex(args.sessions_dir, args.state_db, args.logs_db)
+        return _preview_codex(args.sessions_dir, args.state_db, args.logs_db, args.days, args.since)
     if args.command == "submit":
         return _submit(args.session, args.file, args.base_url, args.yes)
     if args.command == "submit-codex":
-        return _submit_codex(args.session, args.sessions_dir, args.state_db, args.logs_db, args.base_url, args.yes)
+        return _submit_codex(
+            args.session,
+            args.sessions_dir,
+            args.state_db,
+            args.logs_db,
+            args.base_url,
+            args.yes,
+            args.days,
+            args.since,
+        )
     return 1
 
 
@@ -77,8 +90,14 @@ def _preview_csv(path: Path) -> int:
     return 0
 
 
-def _preview_codex(sessions_dir: Path | None, state_db_path: Path | None, logs_db_path: Path | None) -> int:
-    rows, warnings = _preview_codex_source(sessions_dir, state_db_path, logs_db_path)
+def _preview_codex(
+    sessions_dir: Path | None,
+    state_db_path: Path | None,
+    logs_db_path: Path | None,
+    days: int,
+    since: str | None,
+) -> int:
+    rows, warnings = _preview_codex_source(sessions_dir, state_db_path, logs_db_path, days, since)
     _print_preview(rows)
     print("Source: codex_local_telemetry")
     for warning in warnings:
@@ -99,8 +118,10 @@ def _submit_codex(
     logs_db_path: Path | None,
     base_url: str,
     yes: bool,
+    days: int,
+    since: str | None,
 ) -> int:
-    rows, warnings = _preview_codex_source(sessions_dir, state_db_path, logs_db_path)
+    rows, warnings = _preview_codex_source(sessions_dir, state_db_path, logs_db_path, days, since)
     return _submit_rows(session_id, rows, warnings, base_url, yes, "Codex local telemetry")
 
 
@@ -108,13 +129,16 @@ def _preview_codex_source(
     sessions_dir: Path | None,
     state_db_path: Path | None,
     logs_db_path: Path | None,
+    days: int = 30,
+    since: str | None = None,
 ):
+    since_datetime = _codex_since(days, since)
     if sessions_dir is not None:
-        return preview_codex_sessions_usage(sessions_dir)
+        return preview_codex_sessions_usage(sessions_dir, since=since_datetime, aggregate=True)
     if state_db_path is not None:
-        return preview_codex_local_usage(state_db_path)
+        return preview_codex_local_usage(state_db_path, since=since_datetime, aggregate=True)
     if logs_db_path is not None:
-        return preview_codex_local_usage(logs_db_path)
+        return preview_codex_local_usage(logs_db_path, since=since_datetime, aggregate=True)
     raise SystemExit("submit-codex requires --sessions-dir, --state-db, or --logs-db")
 
 
@@ -158,8 +182,55 @@ def _confirm_submission() -> bool:
 
 def _print_preview(rows) -> None:
     total_tokens = sum(row.total_tokens or 0 for row in rows)
+    request_count = sum(row.request_count or 0 for row in rows)
+    input_tokens = sum(row.input_tokens or 0 for row in rows)
+    output_tokens = sum(row.output_tokens or 0 for row in rows)
+    cached_input_tokens = sum(row.cached_input_tokens or 0 for row in rows)
+    reasoning_tokens = sum(row.reasoning_tokens or 0 for row in rows)
     print(f"Rows: {len(rows)}")
+    print(f"Requests: {request_count}")
+    print(f"Input tokens: {input_tokens}")
+    print(f"Cached input tokens: {cached_input_tokens}")
+    print(f"Output tokens: {output_tokens}")
+    print(f"Reasoning tokens: {reasoning_tokens}")
     print(f"Total tokens: {total_tokens}")
+    top_models = _top_models(rows)
+    if top_models:
+        print("Top models:")
+        for model, model_tokens, model_requests in top_models:
+            print(f"- {model}: {model_tokens} tokens, {model_requests} requests")
+
+
+def _codex_since(days: int, since: str | None) -> datetime:
+    if since:
+        return _parse_cli_datetime(since)
+    if days < 1:
+        raise SystemExit("--days must be greater than 0")
+    return datetime.now(UTC) - timedelta(days=days)
+
+
+def _parse_cli_datetime(value: str) -> datetime:
+    normalized = value.strip()
+    if len(normalized) == 10:
+        normalized = f"{normalized}T00:00:00+00:00"
+    if normalized.endswith("Z"):
+        normalized = normalized.replace("Z", "+00:00")
+    parsed = datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _top_models(rows) -> list[tuple[str, int, int]]:
+    by_model: dict[str, tuple[int, int]] = {}
+    for row in rows:
+        model = row.model or "unknown"
+        tokens, requests = by_model.get(model, (0, 0))
+        by_model[model] = (tokens + (row.total_tokens or 0), requests + (row.request_count or 0))
+    return [
+        (model, tokens, requests)
+        for model, (tokens, requests) in sorted(by_model.items(), key=lambda item: item[1][0], reverse=True)[:5]
+    ]
 
 
 def _post_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:

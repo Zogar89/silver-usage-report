@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="auth-shell">
+    <div class="stack">
+      <p class="eyebrow">Silver interno</p>
+      <h1>Entrar al panel</h1>
+      <p class="lede">Acceso privado para revisar reportes de uso mientras se cargan, previsualizan y envian.</p>
+    </div>
+
+    <form class="panel auth-panel" method="post" action="/admin/login">
+      <div class="panel-heading">
+        <p class="eyebrow">Admin</p>
+        <h2>Token de acceso</h2>
+      </div>
+      <label>
+        Token
+        <input name="admin_token" type="password" autocomplete="current-password" autofocus>
+      </label>
+      <button type="submit">Entrar</button>
+    </form>
+  </section>
+{% endblock %}

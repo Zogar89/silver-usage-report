@@ -74,6 +74,8 @@ def get_usage_report_session(
         total_tokens=sum(row.total_tokens or 0 for row in session.rows),
         rows=session.rows,
         warnings=session.warnings,
+        created_at=session.created_at,
+        expires_at=session.expires_at,
         submitted_at=session.submitted_at,
     )
 

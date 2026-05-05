@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -289,6 +290,76 @@ def test_cli_preview_codex_reads_sessions_dir(capsys):
         rollout_dir.rmdir()
         (sessions_dir / "2026" / "04").rmdir()
         (sessions_dir / "2026").rmdir()
+        sessions_dir.rmdir()
+
+
+def test_cli_preview_codex_defaults_to_last_30_days_and_prints_usage_breakdown(capsys):
+    sessions_dir = Path(".tmp_cli_codex_recent_sessions")
+    recent = datetime.now(UTC) - timedelta(days=1)
+    old = datetime.now(UTC) - timedelta(days=45)
+    recent_dir = sessions_dir / recent.strftime("%Y") / recent.strftime("%m") / recent.strftime("%d")
+    old_dir = sessions_dir / old.strftime("%Y") / old.strftime("%m") / old.strftime("%d")
+    recent_dir.mkdir(parents=True, exist_ok=True)
+    old_dir.mkdir(parents=True, exist_ok=True)
+    recent_path = recent_dir / "rollout-recent.jsonl"
+    old_path = old_dir / "rollout-old.jsonl"
+    try:
+        recent_path.write_text(
+            json.dumps(
+                {
+                    "timestamp": recent.isoformat(),
+                    "model": "gpt-5.5",
+                    "payload": {
+                        "type": "token_count",
+                        "info": {
+                            "total_token_usage": {
+                                "input_tokens": 100,
+                                "cached_input_tokens": 25,
+                                "output_tokens": 50,
+                                "reasoning_output_tokens": 10,
+                                "total_tokens": 185,
+                            }
+                        },
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        old_path.write_text(
+            json.dumps(
+                {
+                    "timestamp": old.isoformat(),
+                    "model": "gpt-5.5",
+                    "payload": {
+                        "type": "token_count",
+                        "info": {"total_token_usage": {"input_tokens": 999, "total_tokens": 999}},
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        exit_code = main(["preview-codex", "--sessions-dir", str(sessions_dir)])
+
+        assert exit_code == 0
+        output = capsys.readouterr().out
+        assert "Rows: 1" in output
+        assert "Requests: 1" in output
+        assert "Input tokens: 100" in output
+        assert "Cached input tokens: 25" in output
+        assert "Output tokens: 50" in output
+        assert "Reasoning tokens: 10" in output
+        assert "Total tokens: 185" in output
+        assert "Top models:" in output
+        assert "- gpt-5.5: 185 tokens, 1 requests" in output
+    finally:
+        recent_path.unlink(missing_ok=True)
+        old_path.unlink(missing_ok=True)
+        old_dir.rmdir()
+        recent_dir.rmdir()
+        for path in sorted(sessions_dir.rglob("*"), reverse=True):
+            if path.is_dir():
+                path.rmdir()
         sessions_dir.rmdir()
 
 

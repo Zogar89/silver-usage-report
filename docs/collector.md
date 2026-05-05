@@ -8,20 +8,35 @@ agregadas a Silver.
 
 ## Uso para candidatos
 
-Windows:
+Windows, desde la pagina de sesion:
 
 ```powershell
-.\silver-usage-collector.exe submit-codex --session SESSION_ID --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url https://open.silver.dev
+irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1" | iex
+```
+
+Ese script descarga `silver-usage-collector.exe` a `$env:TEMP` y lo ejecuta con
+la sesion correcta. El collector muestra una previsualizacion y pide
+confirmacion antes de subir datos.
+
+Windows, ejecucion manual:
+
+```powershell
+.\silver-usage-collector.exe submit-codex --session SESSION_ID --sessions-dir "$env:USERPROFILE\.codex\sessions" --days 30 --base-url https://open.silver.dev
 ```
 
 macOS/Linux:
 
 ```bash
-./silver-usage-collector submit-codex --session SESSION_ID --sessions-dir "$HOME/.codex/sessions" --base-url https://open.silver.dev
+./silver-usage-collector submit-codex --session SESSION_ID --sessions-dir "$HOME/.codex/sessions" --days 30 --base-url https://open.silver.dev
 ```
 
-El comando imprime `Rows` y `Total tokens` antes de pedir confirmacion. Si el
-usuario no confirma, no se sube nada.
+Por defecto, `preview-codex` y `submit-codex` reportan los ultimos 30 dias. Se
+puede cambiar con `--days N` o usar una fecha absoluta con `--since YYYY-MM-DD`.
+
+La previsualizacion imprime filas agregadas por dia/modelo, requests,
+`input_tokens`, `cached_input_tokens`, `output_tokens`, `reasoning_tokens`,
+`total_tokens` y los modelos principales. Si el usuario no confirma, no se sube
+nada.
 
 ## Build local
 

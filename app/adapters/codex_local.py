@@ -12,9 +12,14 @@ USAGE_MARKER = "post sampling token usage"
 INTERNAL_USAGE_MARKERS = {"auto-review", "internal_approval", "approval"}
 
 
-def preview_codex_sessions_usage(sessions_dir: Path) -> tuple[list[UsageReportRow], list[ReportWarning]]:
+def preview_codex_sessions_usage(
+    sessions_dir: Path,
+    since: datetime | None = None,
+    aggregate: bool = False,
+) -> tuple[list[UsageReportRow], list[ReportWarning]]:
     events = _read_session_usage_events(sessions_dir)
-    rows = [_event_to_row(event, row_count=len(events)) for event in events]
+    events = _filter_events_since(events, since)
+    rows = _events_to_rows(events, aggregate=aggregate)
     warnings: list[ReportWarning] = []
     if not rows:
         warnings.append(
@@ -28,12 +33,17 @@ def preview_codex_sessions_usage(sessions_dir: Path) -> tuple[list[UsageReportRo
     return rows, warnings
 
 
-def preview_codex_local_usage(logs_db_path: Path) -> tuple[list[UsageReportRow], list[ReportWarning]]:
+def preview_codex_local_usage(
+    logs_db_path: Path,
+    since: datetime | None = None,
+    aggregate: bool = False,
+) -> tuple[list[UsageReportRow], list[ReportWarning]]:
     state_db_path = _state_db_for(logs_db_path)
     events = _read_state_events(state_db_path) if state_db_path else _read_usage_events(logs_db_path)
     external_events = [event for event in events if not _is_internal_usage(event)]
     internal_count = len(events) - len(external_events)
-    rows = [_event_to_row(event, row_count=len(external_events)) for event in external_events]
+    external_events = _filter_events_since(external_events, since)
+    rows = _events_to_rows(external_events, aggregate=aggregate)
     warnings: list[ReportWarning] = []
     if internal_count:
         warnings.append(
@@ -54,6 +64,91 @@ def preview_codex_local_usage(logs_db_path: Path) -> tuple[list[UsageReportRow],
             )
         )
     return rows, warnings
+
+
+def _events_to_rows(events: list[dict[str, Any]], aggregate: bool) -> list[UsageReportRow]:
+    if aggregate:
+        return _aggregate_daily_model_rows(events)
+    return [_event_to_row(event, row_count=len(events)) for event in events]
+
+
+def _filter_events_since(events: list[dict[str, Any]], since: datetime | None) -> list[dict[str, Any]]:
+    if since is None:
+        return events
+    since_utc = since.astimezone(UTC) if since.tzinfo else since.replace(tzinfo=UTC)
+    return [event for event in events if _parse_timestamp(str(event.get("_timestamp"))) >= since_utc]
+
+
+def _aggregate_daily_model_rows(events: list[dict[str, Any]]) -> list[UsageReportRow]:
+    grouped: dict[tuple[datetime, str | None], list[dict[str, Any]]] = {}
+    for event in events:
+        timestamp = _parse_timestamp(str(event.get("_timestamp")))
+        day_start = datetime(timestamp.year, timestamp.month, timestamp.day, tzinfo=UTC)
+        key = (day_start, _optional_str(event.get("model")))
+        grouped.setdefault(key, []).append(event)
+
+    rows: list[UsageReportRow] = []
+    for (day_start, model), group in sorted(grouped.items(), key=lambda item: (item[0][0], item[0][1] or "")):
+        rows.append(
+            UsageReportRow(
+                provider="openai",
+                tool="codex",
+                source="codex_local_telemetry",
+                period_start=day_start.isoformat(),
+                period_end=(day_start + timedelta(days=1)).isoformat(),
+                period_width="1d",
+                model=model,
+                request_count=len(group),
+                input_tokens=_sum_optional(group, "input_tokens"),
+                output_tokens=_sum_optional(group, "output_tokens"),
+                cached_input_tokens=_sum_optional(group, "cached_input_tokens"),
+                cache_creation_input_tokens=_sum_optional(group, "cache_creation_input_tokens"),
+                reasoning_tokens=_sum_optional(group, "reasoning_tokens"),
+                total_tokens=sum(_event_total(event) or 0 for event in group),
+                cost_source="unknown",
+                confidence="medium",
+                evidence=EvidenceMetadata(
+                    adapter=ADAPTER_NAME,
+                    adapter_version=ADAPTER_VERSION,
+                    row_count=len(events),
+                    query_fingerprint=_aggregate_query_fingerprint(group),
+                    warnings=[],
+                ),
+            )
+        )
+    return rows
+
+
+def _aggregate_query_fingerprint(events: list[dict[str, Any]]) -> str:
+    source_fingerprint = _optional_str(events[0].get("_query_fingerprint")) if events else None
+    if source_fingerprint == "codex_state_threads_tokens_used_v1":
+        return "codex_state_daily_model_usage_v1"
+    if source_fingerprint == "codex_sessions_token_count_total_usage_v1":
+        return "codex_sessions_daily_model_usage_v1"
+    return "codex_logs_daily_model_usage_v1"
+
+
+def _sum_optional(events: list[dict[str, Any]], key: str) -> int | None:
+    values = [_optional_int(event.get(key)) for event in events]
+    known_values = [value for value in values if value is not None]
+    if not known_values:
+        return None
+    return sum(known_values)
+
+
+def _event_total(event: dict[str, Any]) -> int | None:
+    explicit_total = _optional_int(event.get("total_tokens"))
+    if explicit_total is not None:
+        return explicit_total
+    values = [
+        _optional_int(event.get("input_tokens")),
+        _optional_int(event.get("output_tokens")),
+        _optional_int(event.get("cached_input_tokens")),
+        _optional_int(event.get("cache_creation_input_tokens")),
+        _optional_int(event.get("reasoning_tokens")),
+    ]
+    total = sum(value or 0 for value in values)
+    return total if total else None
 
 
 def _read_session_usage_events(sessions_dir: Path) -> list[dict[str, Any]]:

@@ -117,10 +117,14 @@ The agent inspects local usage metadata, builds normalized rows, and sends them 
 Best when the user is comfortable running a command.
 
 ```powershell
-.\silver-usage-collector.exe submit-codex --session SESSION_ID --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url https://open.silver.dev
+irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1" | iex
 ```
 
-The collector should run once, show a preview, ask for confirmation, submit aggregate rows, and exit. It must not install an ongoing tracker or daemon. The Python CLI remains available for development and source checkouts, but the candidate path should not require Python.
+The collector script should download the binary to a temporary path, run once,
+show a 30-day daily/model aggregate preview, ask for confirmation, submit
+aggregate rows, and exit. It must not install an ongoing tracker or daemon. The
+Python CLI remains available for development and source checkouts, but the
+candidate path should not require Python.
 
 ### Pasted Stats
 

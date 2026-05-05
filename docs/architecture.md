@@ -91,7 +91,7 @@ Responsibilities:
 Candidate package:
 
 ```powershell
-.\silver-usage-collector.exe submit-codex --session SESSION_ID --base-url https://open.silver.dev
+irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1" | iex
 ```
 
 ### Manual, CSV, And JSON Import
