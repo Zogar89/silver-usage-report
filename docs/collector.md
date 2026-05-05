@@ -4,7 +4,7 @@ El camino candidato actual no usa binario. La pagina de sesion sirve un
 `collector.ps1` generado para esa sesion:
 
 ```powershell
-irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1?token=PRIVATE_TOKEN" | iex
+irm "https://reports.tu-dominio.example/reports/sessions/SESSION_ID/collector.ps1?token=PRIVATE_TOKEN" | iex
 ```
 
 El script corre una sola vez, usa solo PowerShell y APIs del sistema, lee

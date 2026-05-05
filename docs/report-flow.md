@@ -43,7 +43,7 @@ Crear sesión web
 Comando generado:
 
 ```powershell
-irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1?token=PRIVATE_TOKEN" | iex
+irm "https://reports.tu-dominio.example/reports/sessions/SESSION_ID/collector.ps1?token=PRIVATE_TOKEN" | iex
 ```
 
 El collector no instala nada. Corre una vez, termina y deja el control al usuario.

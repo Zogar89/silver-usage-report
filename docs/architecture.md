@@ -91,7 +91,7 @@ No existen rutas `/upload`, `/confirm` ni `/api/usage-report/admin/reports`.
 El flujo candidato usa un PowerShell generado por la web:
 
 ```powershell
-irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1?token=PRIVATE_TOKEN" | iex
+irm "https://reports.tu-dominio.example/reports/sessions/SESSION_ID/collector.ps1?token=PRIVATE_TOKEN" | iex
 ```
 
 El collector actual:

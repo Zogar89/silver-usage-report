@@ -1,7 +1,6 @@
 # Silver Usage Report Design System
 
 Referencia visual principal: captura de `silver.dev`.
-Referencia secundaria: `open.silver.dev` para estructura de links/productos.
 
 Este documento reemplaza el sistema anterior. El objetivo no es duplicar CSS propietario, sino traducir el lenguaje visual de Silver a este producto: utilitario, editorial, denso, directo y con superficies de borde firme.
 

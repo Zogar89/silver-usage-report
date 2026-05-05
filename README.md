@@ -145,7 +145,7 @@ Ver [Configuración](docs/configuration.md) y [Deploy](docs/deployment.md).
 La página de sesión muestra un comando con el token privado embebido:
 
 ```powershell
-irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1?token=PRIVATE_TOKEN" | iex
+irm "https://reports.tu-dominio.example/reports/sessions/SESSION_ID/collector.ps1?token=PRIVATE_TOKEN" | iex
 ```
 
 El script:
