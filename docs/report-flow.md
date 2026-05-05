@@ -63,6 +63,15 @@ Silver admins necesitan acceso al panel interno. Reporteros no.
 Cada sesión genera un link privado. Ese link es la prueba y superficie de control
 del reportero.
 
+La creación de sesión usa redirect a una URL privada estable:
+
+```text
+/reports/sessions/SESSION_ID?token=PRIVATE_TOKEN
+```
+
+Esto evita que un refresh cree un nuevo id. La sesión también se guarda en
+`localStorage` para mostrar "reportes existentes" en ese mismo navegador.
+
 La página de estado muestra:
 
 - Código de sesión.
@@ -74,6 +83,9 @@ La página de estado muestra:
 
 El link privado debe incluir token. El session id o public code solos no deben
 alcanzar para borrar o ver estado privado.
+
+Sin login de reportero no hay recuperación cross-device: si el usuario cambia de
+navegador o borra datos locales, necesita el link privado.
 
 ## Flujo MVP
 

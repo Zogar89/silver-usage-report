@@ -30,6 +30,22 @@
     </div>
   </section>
 
+  <section class="panel restore-panel">
+    <div class="panel-heading">
+      <p class="eyebrow">Reportes existentes</p>
+      <h2>Volver a un envio anterior</h2>
+    </div>
+    <div id="saved-reports" class="saved-report-list" data-empty-text="No hay reportes guardados en este navegador."></div>
+    <form class="restore-form" method="post" action="/reports/sessions/open">
+      <label>
+        Link privado
+        <input name="management_url" placeholder="https://open.silver.dev/reports/sessions/session_...?...">
+      </label>
+      <button class="secondary" type="submit">Abrir reporte</button>
+    </form>
+    <p class="muted">El historial local solo existe en este navegador. Para entrar desde otro lugar, necesitas el link privado del reporte.</p>
+  </section>
+
   <section class="link-grid" aria-label="Caminos de reporte">
     <article class="link-card">
       <span>Importacion local</span>
@@ -44,4 +60,35 @@
       <p>Prompts, respuestas, codigo, logs crudos, variables de entorno y API keys quedan fuera.</p>
     </article>
   </section>
+  <script>
+    (function () {
+      var container = document.getElementById("saved-reports");
+      if (!container) {
+        return;
+      }
+      var reports = [];
+      try {
+        reports = JSON.parse(localStorage.getItem("silverUsageReports") || "[]");
+      } catch (error) {
+        reports = [];
+      }
+      if (!Array.isArray(reports) || reports.length === 0) {
+        container.innerHTML = '<p class="muted">' + container.dataset.emptyText + '</p>';
+        return;
+      }
+      var list = document.createElement("div");
+      list.className = "saved-report-items";
+      reports.slice(0, 10).forEach(function (report) {
+        if (!report || !report.url) {
+          return;
+        }
+        var link = document.createElement("a");
+        link.href = report.url;
+        link.className = "saved-report-item";
+        link.innerHTML = "<strong>" + (report.publicCode || report.id) + "</strong><span>" + (report.status || "draft") + "</span>";
+        list.appendChild(link);
+      });
+      container.replaceChildren(list);
+    })();
+  </script>
 {% endblock %}

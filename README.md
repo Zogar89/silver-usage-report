@@ -179,6 +179,13 @@ enviados. Silver puede vincular reportes con candidatos usando los campos
 opcionales `reporter_email`, `github_handle`, `x_handle`, `candidate_ref` y
 `campaign_ref`, visibles en `/admin/reports` y en el detalle admin.
 
+La creacion web redirige a una URL privada estable
+`/reports/sessions/SESSION_ID?token=PRIVATE_TOKEN`, asi que recargar la pagina no
+crea otra sesion. La web guarda los ultimos reportes en `localStorage` de ese
+navegador y la portada permite pegar un link privado para reabrir un reporte. Si
+el usuario cambia de navegador o borra datos del sitio, necesita conservar ese
+link privado porque no hay login de reportero.
+
 Initial API endpoints:
 
 ```text

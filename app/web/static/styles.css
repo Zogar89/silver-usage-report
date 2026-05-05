@@ -241,6 +241,43 @@ button.secondary {
   font-size: 14px;
 }
 
+.restore-panel {
+  max-width: 760px;
+}
+
+.restore-form {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: end;
+}
+
+.saved-report-list {
+  min-height: 22px;
+}
+
+.saved-report-items {
+  display: grid;
+  gap: 8px;
+}
+
+.saved-report-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #ded8cd;
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: inherit;
+  background: #fbfaf7;
+  text-decoration: none;
+}
+
+.saved-report-item span {
+  color: #6f695f;
+  font-size: 13px;
+}
+
 .session-strip {
   padding: 16px 18px;
 }
@@ -397,6 +434,7 @@ h3 {
   .two-column,
   .field-grid,
   .auth-shell,
+  .restore-form,
   .metric-grid,
   .split-heading {
     grid-template-columns: 1fr;

@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlparse
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -35,11 +35,11 @@ def index(request: Request) -> HTMLResponse:
     )
 
 
-@router.post("/reports/sessions", response_class=HTMLResponse)
+@router.post("/reports/sessions")
 async def start_report_session(
     request: Request,
     db: Session = Depends(get_db),
-) -> HTMLResponse:
+) -> RedirectResponse:
     form = _parse_urlencoded_form(await request.body())
     session = create_report_session(
         db,
@@ -50,6 +50,26 @@ async def start_report_session(
         candidate_ref=_blank_to_none(form.get("candidate_ref")),
         campaign_ref=_blank_to_none(form.get("campaign_ref")),
     )
+    return RedirectResponse(url=_session_url(request, session), status_code=303)
+
+
+@router.post("/reports/sessions/open")
+async def open_existing_report_session(request: Request) -> RedirectResponse:
+    form = _parse_urlencoded_form(await request.body())
+    session_id, token = _parse_management_link(form.get("management_url", ""))
+    if not session_id or not token:
+        raise HTTPException(status_code=400, detail="private report link required")
+    return RedirectResponse(url=f"/reports/sessions/{session_id}?token={token}", status_code=303)
+
+
+@router.get("/reports/sessions/{session_id}", response_class=HTMLResponse)
+def report_session_page(
+    session_id: str,
+    request: Request,
+    token: str | None = None,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    session = _get_managed_session_or_401(db, session_id, token)
     return _render_session(request, session)
 
 
@@ -57,9 +77,10 @@ async def start_report_session(
 def submit_report_session_page(
     session_id: str,
     request: Request,
+    token: str | None = None,
     db: Session = Depends(get_db),
 ) -> HTMLResponse:
-    session = _get_session_or_404(db, session_id)
+    session = _get_managed_session_or_401(db, session_id, token)
     confirmed_at = datetime.now(UTC)
     payload = UsageReportPayload(
         report_session_id=session.id,
@@ -72,7 +93,7 @@ def submit_report_session_page(
         },
     )
     summary = submit_report_session(db, session, payload)
-    session = _get_session_or_404(db, session_id)
+    session = _get_managed_session_or_401(db, session_id, token)
     return _render_session(request, session, summary=summary, banner="Reporte enviado")
 
 
@@ -80,11 +101,12 @@ def submit_report_session_page(
 def delete_report_session_page(
     session_id: str,
     request: Request,
+    token: str | None = None,
     db: Session = Depends(get_db),
 ) -> HTMLResponse:
-    session = _get_session_or_404(db, session_id)
+    session = _get_managed_session_or_401(db, session_id, token)
     summary = delete_report_session_data(db, session)
-    session = _get_session_or_404(db, session_id)
+    session = _get_managed_session_or_401(db, session_id, token)
     return _render_session(request, session, summary=summary, banner="Reporte eliminado")
 
 
@@ -116,15 +138,17 @@ def report_session_status(
 def report_session_preview_panel(
     session_id: str,
     request: Request,
+    token: str | None = None,
     db: Session = Depends(get_db),
 ) -> HTMLResponse:
-    session = _get_session_or_404(db, session_id)
+    session = _get_managed_session_or_401(db, session_id, token)
     return templates.TemplateResponse(
         request,
         "_session_preview_panel.html",
         {
             "session": session,
             "summary": summarize_report_session(session),
+            "management_token": token,
         },
     )
 
@@ -306,6 +330,7 @@ def _render_session(
             "banner": banner,
             "codex_cli_command": codex_cli_command,
             "management_url": _management_url(request, session),
+            "management_token": session.private_token,
         },
     )
 
@@ -317,9 +342,31 @@ def _get_session_or_404(db: Session, session_id: str) -> ReportSession:
     return session
 
 
+def _get_managed_session_or_401(db: Session, session_id: str, token: str | None) -> ReportSession:
+    if not token:
+        raise HTTPException(status_code=401, detail="management token required")
+    session = get_report_session_for_management(db, session_id, token)
+    if session is None:
+        raise HTTPException(status_code=401, detail="invalid management token")
+    return session
+
+
 def _parse_urlencoded_form(body: bytes) -> dict[str, str]:
     parsed = parse_qs(body.decode("utf-8"), keep_blank_values=True)
     return {key: values[0] for key, values in parsed.items()}
+
+
+def _parse_management_link(value: str) -> tuple[str | None, str | None]:
+    parsed = urlparse(value.strip())
+    path_parts = [part for part in parsed.path.split("/") if part]
+    token = parse_qs(parsed.query).get("token", [None])[0]
+    try:
+        reports_index = path_parts.index("reports")
+    except ValueError:
+        return None, token
+    if len(path_parts) <= reports_index + 2 or path_parts[reports_index + 1] != "sessions":
+        return None, token
+    return path_parts[reports_index + 2], token
 
 
 def _blank_to_none(value: str | None) -> str | None:
@@ -332,5 +379,9 @@ def _blank_to_none(value: str | None) -> str | None:
 def _management_url(request: Request, session: ReportSession) -> str | None:
     if not session.private_token:
         return None
+    return _session_url(request, session)
+
+
+def _session_url(request: Request, session: ReportSession) -> str:
     base_url = str(request.base_url).rstrip("/")
-    return f"{base_url}/reports/sessions/{session.id}/status?token={session.private_token}"
+    return f"{base_url}/reports/sessions/{session.id}?token={session.private_token}"
