@@ -1,166 +1,159 @@
-# Architecture
+# Arquitectura
 
-Implementation stack:
+Silver Usage Report es una aplicacion Python para recolectar, previsualizar y enviar a Silver metricas agregadas de uso de herramientas de IA. El flujo actual es web-first y collector-first: la persona crea una sesion privada, ejecuta un collector PowerShell one-shot, revisa una previsualizacion local y solo despues confirma el envio.
 
-- Docker.
-- Python.
-- FastAPI.
-- Jinja2.
-- HTMX.
-- Pydantic.
-- SQLAlchemy/Alembic.
-- PostgreSQL.
-- Typer CLI.
-- Python MCP server.
+Stack principal:
 
-See [Technical architecture](technical-architecture.md) for the implementation-level layout.
+- FastAPI para API HTTP, paginas web y healthcheck.
+- Jinja2 + HTMX para UI server-rendered.
+- Pydantic para contratos de datos y validacion.
+- SQLAlchemy para modelos y acceso a datos.
+- Alembic para migraciones versionadas.
+- PostgreSQL en Docker Compose.
+- SQLite como default local liviano si `DATABASE_URL` no se configura.
+- CLI Python con `argparse`.
 
-## High-Level Shape
+Ver [Arquitectura tecnica](technical-architecture.md) para layout de codigo, rutas y runtime.
 
-Silver Usage Report has one core job: turn heterogeneous AI usage sources into a normalized report that a user can safely submit to Silver.
+## Forma General
 
-The system should support several intake paths:
-
-- Browser/provider import for providers with usable usage APIs.
-- Local one-shot CLI import for local logs and provider keys in environment variables.
-- CSV/JSON/manual fallback for unsupported sources.
-- Future MCP workflow that wraps the same importer core.
+El sistema evita recolectar prompts, respuestas, codigo fuente, logs crudos o API keys. La unidad persistida es una fila agregada de uso por periodo/modelo, junto con warnings y evidencia tecnica sanitizada.
 
 ```mermaid
 flowchart LR
-  User["User"] --> Web["Web report flow"]
-  Web --> Session["Report session"]
-  User --> CLI["One-shot CLI importer"]
-  User --> Manual["CSV / JSON / manual input"]
-  CLI --> Sources["Local tool telemetry or pasted stats"]
-  Sources --> CLI
-  CLI --> Preview["Preview"]
-  Manual --> Preview
-  Preview --> Upload["Confirmed report upload"]
-  Upload --> API["Silver report API"]
-  API --> DB["Report database"]
-  DB --> Admin["Silver review view"]
+  User["Persona"] --> Web["Web report flow"]
+  Web --> Session["Sesion privada"]
+  Session --> Collector["collector.ps1 con token"]
+  Collector --> LocalTelemetry["Telemetria local soportada"]
+  LocalTelemetry --> LocalPreview["Preview local"]
+  LocalPreview --> SignedSubmit["API submit firmado"]
+  SignedSubmit --> Db["Base de datos"]
+  Db --> Admin["Panel admin Silver"]
 ```
 
-## Components
+## Componentes
 
 ### Web Report Flow
 
-Responsibilities:
+Responsabilidades:
 
-- Create report sessions.
-- Explain what Silver needs and why.
-- Display provider/tool setup instructions.
-- Accept normalized report payloads.
-- Provide CSV/JSON/manual fallback.
-- Render the report preview.
-- Let users confirm or delete submitted reports.
+- Crear sesiones privadas de reporte.
+- Mostrar instrucciones y comando collector con token embebido.
+- Abrir una sesion existente desde su management link.
+- Renderizar la pagina privada de sesion, estado, reporte y detalle candidato.
+- Redirigir automaticamente al detalle cuando llega el submit del collector.
+- Permitir borrado de datos desde la sesion privada.
+- Servir `collector.ps1` generado para una sesion.
 
-### Report Session API
+Rutas web reales:
 
-Responsibilities:
+```text
+GET  /
+POST /reports/sessions
+POST /reports/sessions/open
+GET  /reports/sessions/{session_id}?token=PRIVATE_TOKEN
+POST /reports/sessions/{session_id}/submit?token=PRIVATE_TOKEN
+GET  /reports/sessions/{session_id}/report?token=PRIVATE_TOKEN
+POST /reports/sessions/{session_id}/delete?token=PRIVATE_TOKEN
+GET  /reports/sessions/{session_id}/status?token=PRIVATE_TOKEN
+GET  /reports/sessions/{session_id}/preview-panel?token=PRIVATE_TOKEN
+GET  /reports/sessions/{session_id}/report-redirect?token=PRIVATE_TOKEN
+POST /reports/sessions/{session_id}/delete-managed
+GET  /reports/sessions/{session_id}/collector.ps1?token=PRIVATE_TOKEN
+```
 
-- Create short-lived report tokens.
-- Bind uploads to an anonymous session or declared individual identity.
-- Reject expired or replayed uploads.
-- Store only normalized aggregate report rows.
-- Preserve source and confidence labels.
+### API De Reportes
 
-Suggested endpoints:
+La API soporta el collector y el CLI de desarrollo. La creacion de sesion devuelve un `private_token`; las operaciones privadas requieren `token=PRIVATE_TOKEN`.
+Los POST privados que reciben datos tambien deben firmar el body con HMAC-SHA256
+usando ese token y enviar `X-Silver-Timestamp` + `X-Silver-Signature`. El
+timestamp tiene una ventana de 5 minutos.
+
+La creacion de sesiones limita a 5 reportes por candidato cuando existen
+identificadores comparables como `candidate_ref`, email, GitHub, X o nombre.
+
+Rutas API reales:
 
 ```text
 POST   /api/usage-report/sessions
-GET    /api/usage-report/sessions/:id
-POST   /api/usage-report/sessions/:id/upload
-POST   /api/usage-report/sessions/:id/confirm
-DELETE /api/usage-report/sessions/:id
-GET    /api/usage-report/admin/reports
+GET    /api/usage-report/sessions/{session_id}?token=PRIVATE_TOKEN
+GET    /api/usage-report/sessions/{session_id}/status?token=PRIVATE_TOKEN
+POST   /api/usage-report/sessions/{session_id}/preview?token=PRIVATE_TOKEN
+POST   /api/usage-report/sessions/{session_id}/submit?token=PRIVATE_TOKEN
+POST   /api/usage-report/sessions/{session_id}/collector-diagnostics?token=PRIVATE_TOKEN
+DELETE /api/usage-report/sessions/{session_id}?token=PRIVATE_TOKEN
 ```
 
-### CLI Importer
+No existen rutas `/upload`, `/confirm` ni `/api/usage-report/admin/reports`.
 
-Responsibilities:
+### Collector One-Shot
 
-- Pair with a report session.
-- Detect supported local sources.
-- Pull provider usage data when credentials exist locally.
-- Normalize provider-specific fields.
-- Show a local preview.
-- Upload only aggregate report rows after confirmation.
+El flujo candidato usa un PowerShell generado por la web:
 
-Candidate package:
-
-```bash
-npx -y @silver/usage-report import
+```powershell
+irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1?token=PRIVATE_TOKEN" | iex
 ```
 
-### Manual, CSV, And JSON Import
+El collector actual:
 
-Responsibilities:
+- Lee telemetria local soportada de Codex.
+- Busca archivos `rollout-*.jsonl` en el directorio de sesiones.
+- Agrega por dia/modelo.
+- Muestra preview local en la terminal.
+- Pide confirmacion antes de enviar.
+- Publica submit y diagnosticos con token privado y firma HMAC.
+- Intenta enviar diagnosticos sanitizados si falla.
 
-- Let unsupported users still complete a report.
-- Provide a small schema and template.
-- Label manual data with lower confidence.
-- Avoid blocking the main flow on source-specific automation gaps.
+No instala un daemon, no descarga un binario y no pide credenciales provider/org/admin.
 
-This matters because Silver needs broad coverage more than perfect automation on day one.
+### CLI De Desarrollo
 
-### MCP Importer
 
-The MCP version can expose the same import capabilities to coding agents:
+Comandos principales:
+
+```powershell
+python -m cli.main preview-codex --sessions-dir "$env:USERPROFILE\.codex\sessions" --days 90
+python -m cli.main submit-codex --session SESSION_ID --token PRIVATE_TOKEN --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url http://localhost:8002 --days 90 --yes
+```
+
+### Admin
+
+El panel admin permite listar, buscar, paginar, revisar, eliminar reportes y
+editar identidad asociada. Las metricas de uso se muestran dentro del detalle de
+cada reporte/candidato; la lista queda como superficie operativa.
+
+Rutas admin reales:
 
 ```text
-usage_report.preview_report
-usage_report.upload_report
-usage_report.get_report_status
+GET  /admin
+POST /admin/login
+GET  /admin/reports
+GET  /admin/reports/{session_id}
+POST /admin/reports/{session_id}/delete
+POST /admin/reports/{session_id}/identity
 ```
 
-The MCP importer is central to the "paste this prompt in your local agent" flow. It should accept only strict structured rows, validate source/confidence/evidence, and reject sensitive fields.
+En produccion, `ADMIN_TOKEN` es obligatorio. El acceso admin acepta cookie emitida por `/admin/login` o header `x-admin-token`.
 
-See [MCP-assisted import](mcp-assisted-import.md).
+## Datos Persistidos
 
-## Trust Boundary
-
-Provider credentials should remain local whenever possible.
-
-For the current employee-focused MVP, do not ask users for provider admin keys or organization credentials. The preferred automatic flow is local inspection of tool telemetry/stats, followed by a preview and explicit confirmation.
-
-```mermaid
-flowchart TB
-  subgraph LocalMachine["User machine"]
-    Stats["Local tool telemetry / stats"]
-    Importer["CLI importer"]
-    LocalPreview["Local preview"]
-  end
-
-  subgraph SilverCloud["Silver cloud"]
-    ReportAPI["Report API"]
-    Aggregates["Aggregate report rows"]
-    Review["Silver review view"]
-  end
-
-  Stats --> Importer
-  Importer --> LocalPreview
-  LocalPreview --> ReportAPI
-  ReportAPI --> Aggregates
-  Aggregates --> Review
-```
-
-## Data Storage
-
-Store normalized report rows, not raw provider responses.
-
-Suggested tables:
+Tablas principales:
 
 ```text
 report_sessions
 - id
-- user_id nullable
+- public_code
+- private_token_hash
 - reporter_label nullable
+- reporter_email nullable
+- github_handle nullable
+- x_handle nullable
+- candidate_ref nullable
+- campaign_ref nullable
 - status
 - created_at
 - expires_at
-- confirmed_at nullable
+- submitted_at nullable
 
 usage_report_rows
 - id
@@ -185,55 +178,62 @@ usage_report_rows
 - evidence_json nullable
 - created_at
 
+Los costos para OpenAI se estiman en el servidor durante preview/submit cuando
+la fila trae modelo y conteos de tokens. La tabla fuente vive en
+`app/data/openai_model_prices.json`; se actualiza editando ese archivo cuando
+OpenAI publique modelos o precios nuevos. El calculo usa input fresco, input en
+cache y output con precios USD por millon de tokens.
+
 report_warnings
 - id
 - report_session_id
+- row_id nullable
 - provider nullable
 - tool nullable
 - code
 - message
 - created_at
+
+collector_diagnostics
+- id
+- report_session_id
+- stage
+- error_type nullable
+- message
+- solution_hint nullable
+- collector_version nullable
+- powershell_version nullable
+- os nullable
+- sessions_dir_status nullable
+- rollout_file_count nullable
+- context_json nullable
+- created_at
 ```
 
-Project IDs, API key IDs, team names, and machine names should be excluded by default. If the product later needs labels, they should be opt-in and clearly previewed.
+## Validacion Y Privacidad
 
-## Cost Normalization
+Los modelos Pydantic rechazan campos sensibles como `prompt`, `response`, `conversation`, `api_key`, `secret`, `raw_log` y `source_code`. Tambien rechazan tokens o costos negativos, rangos de fechas invalidos y payloads de submit sin confirmacion de preview. Los diagnosticos solo aceptan contexto acotado (`days` y `session_id`) para evitar que se filtren datos arbitrarios.
 
-Cost source should be explicit:
 
-- `provider_actual`: the provider returned exact request cost.
-- `provider_report`: the provider returned billing/reporting cost.
-- `estimated`: Silver calculated cost from model prices.
-- `manual`: the user entered a cost number.
-- `unknown`: cost is unavailable.
+## Runtime Y Deploy
 
-Do not mix estimated, manual, and actual costs silently. Silver's review UI should label mixed data.
+El runtime Docker Compose tiene dos servicios:
 
-## Confidence Model
+```text
+web  FastAPI + Jinja2 + HTMX, expuesto en localhost:8002
+db   PostgreSQL 16, solo red interna como db:5432
+```
 
-Each report row should carry confidence:
+Ambos servicios tienen healthchecks. La app expone:
 
-- `high`: verified structured export or future official source. Out of current employee MVP for provider org APIs.
-- `medium`: local tool log or gateway export that includes token fields.
-- `low`: manual entry, screenshot/OCR, or inferred estimate.
+```text
+GET /health
+```
 
-Confidence is not a judgment of the user. It is a signal for how much Silver should rely on the row.
+En startup, `init_database()` ejecuta `Base.metadata.create_all`. Alembic sigue siendo el camino para migraciones versionadas y debe ejecutarse en deploy con:
 
-The server should derive or cap confidence from source and evidence. The client or LLM should not be able to mark an unsupported claim as high confidence.
+```bash
+docker compose run --rm web alembic upgrade head
+```
 
-See [Trust model](trust-model.md).
-
-## Failure Modes
-
-- Provider API lacks historical usage access.
-- A provider/tool only exposes org/admin analytics, which employees cannot access.
-- Billing data is delayed.
-- Provider returns tokens but not cost.
-- Provider returns cost but not token categories.
-- Local logs contain private prompt content.
-- User imports duplicate ranges.
-- User uses a tool with no export or local stats.
-- User enters rough manual estimates.
-- A tool or provider only exposes organization/admin analytics that employees cannot access.
-
-Each importer should return warnings that the UI can display.
+Ver [Configuracion](configuration.md) y [Deploy](deployment.md).

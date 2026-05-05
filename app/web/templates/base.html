@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title }} - Silver Usage Report</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}?v=20260505-home-form-width">
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/">Open Silver</a>
+      <nav aria-label="Principal">
+        <a href="https://open.silver.dev/">Inicio</a>
+        <a href="https://open.silver.dev/#talent">Para talento</a>
+        <a href="https://open.silver.dev/#companies">Para empresas</a>
+      </nav>
+    </header>
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

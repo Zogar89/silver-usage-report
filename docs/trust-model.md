@@ -1,162 +1,84 @@
 # Trust Model
 
-Silver Usage Report should not pretend every submitted number is equally reliable.
+Silver Usage Report confía en datos agregados producidos por un collector
+determinístico, no en afirmaciones libres.
 
-The product cannot fully prevent lying or hallucination. It can make source quality explicit, limit what is accepted, and prevent freeform claims from being treated as verified data.
+## Fuente Vigente
 
-## Core Rule
-
-Never accept "I used X tokens" as a standalone truth.
-
-Accept:
+La única fuente vigente del producto es:
 
 ```text
-usage rows
-+ source
-+ confidence
-+ evidence metadata
-+ preview confirmation
+codex_local_telemetry
 ```
 
-## Confidence Levels
+Se considera confianza `medium`: es telemetría local útil, pero no billing
+oficial de OpenAI ni uso total de la cuenta.
 
-Confidence is calculated from source and evidence. The client or LLM should not freely choose it.
+## Evidencia
 
-| Source | Confidence |
-| --- | --- |
-| Provider official API or verified official export | High, out of current MVP scope for employees |
-| Deterministic local telemetry adapter | Medium |
-| Tool stats command or structured paste | Medium |
-| CSV/JSON from user export | Medium or low depending on schema |
-| Screenshot/OCR | Low or medium depending on parser confidence |
-| Manual entry | Low |
-| LLM estimate without evidence | Reject or low with warning |
+Cada fila puede incluir metadata como:
 
-## Evidence Requirements
+- adapter;
+- adapter version;
+- row count;
+- query fingerprint;
+- modelo;
+- ventana de contexto;
+- plan/rate-limit metadata cuando exista.
 
-Every non-manual source should include evidence metadata.
+No se sube la fuente cruda.
 
-Examples:
+## Validación Actual
 
-- Adapter name/version.
-- Row count.
-- Dedupe key.
-- Date range.
-- Query fingerprint.
-- Source hash when safe.
-- Warning list.
+El servidor valida:
 
-Do not upload the raw source by default.
+- posesion del `PRIVATE_TOKEN` en rutas privadas;
+- firma HMAC de los POST que reciben datos;
+- ventana temporal de 5 minutos para reducir replay;
+- valores de enum permitidos;
+- tokens no negativos;
+- rangos de fechas válidos;
+- confirmación antes de submit;
+- rechazo recursivo de campos sensibles;
+- derivación de `total_tokens` cuando se conocen partes.
 
-## Server-Side Validation
+Campos sensibles rechazados:
 
-The server should validate:
+- `prompt`;
+- `prompts`;
+- `response`;
+- `responses`;
+- `conversation`;
+- `conversation_history`;
+- `api_key`;
+- `secret`;
+- `environment`;
+- `env`;
+- `source_code`;
+- `raw_log`.
 
-- Required fields.
-- Allowed source values.
-- Non-negative token counts.
-- Valid date ranges.
-- Reasonable period length.
-- Duplicate report rows.
-- Disallowed sensitive fields.
-- Payload size limits.
-- Confidence derived from source, not client trust.
+## Preview Antes De Enviar
 
-Sensitive fields to reject:
+El preview ocurre localmente en PowerShell. El submit solo se ejecuta si el
+usuario confirma.
 
-- Prompts.
-- Responses.
-- Raw logs.
-- Source code.
-- API keys.
-- Environment variables.
-- Full local paths.
-- Conversation transcript content.
+## Que Prueba La Firma
 
-## Preview Before Submit
+La firma HMAC prueba que quien envio el body conocia el token privado de esa
+sesion y que el payload no fue modificado en transito. No prueba de forma
+absoluta que el cliente sea el script oficial, porque el script corre en la
+maquina del usuario y puede ser inspeccionado. Es una barrera contra envios
+casuales, fruta sin token y replay simple; para garantias mas fuertes harian
+falta desafios one-time, attestation o validacion externa.
 
-Preview is mandatory.
+## Límites
 
-The user must see:
+- No representa billing oficial.
+- Puede omitir otros dispositivos o herramientas.
+- Depende de que Codex conserve rollouts locales.
+- No estima costo si no hay costo real en la fuente.
+- Un usuario con el token podria reimplementar el cliente firmado.
 
-- Provider.
-- Tool.
-- Period.
-- Token counts.
-- Cost if available.
-- Source.
-- Confidence.
-- Evidence metadata.
-- Warnings.
-- What will and will not be sent.
+## Regla Principal
 
-Submission should happen only after confirmation.
-
-## LLM Role
-
-The LLM can orchestrate. It should not be the calculator of record.
-
-Good:
-
-```text
-LLM finds supported source
-→ runs deterministic adapter
-→ shows preview
-→ submits structured rows
-```
-
-Bad:
-
-```text
-LLM reads some logs
-→ guesses a number
-→ submits high-confidence report
-```
-
-## Handling Manual Reports
-
-Manual data is allowed because the product must work for everyone.
-
-Rules:
-
-- Always label manual rows as `confidence: "low"`.
-- Show manual rows separately in Silver review.
-- Do not combine manual and computed rows into a single unlabeled total.
-- Ask for period and source note.
-- Allow optional evidence attachment only with explicit user opt-in.
-
-## Handling Cost
-
-Cost is harder than tokens.
-
-Rules:
-
-- Local telemetry token counts are not billing.
-- Estimated cost needs a pricing table and model-specific rules.
-- Cached/reasoning tokens may need different pricing.
-- If cost cannot be computed safely, use `costSource: "unknown"`.
-- Never show estimated cost as actual billed spend.
-
-## Admin Review
-
-Silver review should group reports by confidence:
-
-- Computed from local telemetry.
-- Parsed from tool stats.
-- Imported from CSV/JSON.
-- Manual.
-
-Review UI should show warnings and source metadata before any comparison or leaderboard.
-
-## Product Framing
-
-Token spend is a signal, not a performance score.
-
-The product should avoid:
-
-- Ranking people purely by tokens.
-- Saying high token spend means high productivity.
-- Hiding confidence/source labels.
-- Employer-surveillance framing.
-
-Silver Usage Report should be transparent, consent-based, and honest about uncertainty.
+Si no hay telemetría local Codex soportada, no se inventa un reporte.

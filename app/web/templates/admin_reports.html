@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="stack">
+    <p class="eyebrow">Para Silver</p>
+    <h1>Revision admin</h1>
+    <p class="lede">Lista de candidatos/reportes para revisar datos, abrir el detalle y gestionar envios.</p>
+    {% if deleted_code %}
+      <p class="notice">Reporte {{ deleted_code }} eliminado del tablero activo.</p>
+    {% endif %}
+  </section>
+
+  <section class="metric-grid" aria-label="Resumen admin">
+    <div class="metric">
+      <span>Reportes activos</span>
+      <strong>{{ dashboard.report_count }}</strong>
+      <small>Cada reporte representa un candidato</small>
+    </div>
+    <div class="metric">
+      <span>Con uso cargado</span>
+      <strong>{{ dashboard.reports_with_usage }}</strong>
+      <small>Tienen filas recolectadas</small>
+    </div>
+    <div class="metric">
+      <span>Enviados</span>
+      <strong>{{ dashboard.submitted_count }}</strong>
+      <small>{{ dashboard.pending_count }} pendientes o en preview</small>
+    </div>
+    <div class="metric">
+      <span>Costo estimado</span>
+      <strong>{{ dashboard.total_cost_usd | usd }}</strong>
+      <small>Segun tabla local OpenAI</small>
+    </div>
+    <div class="metric">
+      <span>Ultima actividad</span>
+      <strong>{{ dashboard.latest_activity | date_short if dashboard.latest_activity else "-" }}</strong>
+      <small>Ultima actividad {{ dashboard.latest_activity | datetime_short if dashboard.latest_activity else "Sin actividad" }}</small>
+    </div>
+  </section>
+
+  <section class="panel table-wrap admin-table">
+    <div class="panel-heading split-heading">
+      <div>
+        <p class="eyebrow">Candidatos</p>
+        <h2>Reportes recientes</h2>
+      </div>
+      <p class="muted">Las metricas de uso estan dentro del detalle de cada reporte.</p>
+    </div>
+
+    <form class="admin-controls" method="get" action="/admin/reports"
+      hx-get="/admin/reports"
+      hx-target="#admin-report-results"
+      hx-trigger="input changed delay:300ms, search, submit"
+      hx-push-url="true">
+      <label>
+        Buscar
+        <input name="q" value="{{ report_page.query or '' }}" type="search" placeholder="codigo, candidato, email, GitHub, estado...">
+      </label>
+      <input type="hidden" name="per_page" value="{{ report_page.per_page }}">
+      <button class="secondary" type="submit">Buscar</button>
+    </form>
+
+    <div id="admin-report-results">
+      {% include "_admin_reports_results.html" %}
+    </div>
+  </section>
+{% endblock %}

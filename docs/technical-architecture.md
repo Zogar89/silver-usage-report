@@ -1,55 +1,22 @@
-# Technical Architecture
+# Arquitectura Tecnica
 
-Silver Usage Report will be built as a Python-first Dockerized web application.
+Silver Usage Report es una aplicacion FastAPI empaquetada como proyecto Python instalable. Sirve HTML con Jinja2/HTMX, expone una API HTTP para sesiones de reporte y persiste datos con SQLAlchemy sobre PostgreSQL o SQLite.
 
-Chosen stack:
+## Stack
 
-- Python.
+- Python 3.13.
 - FastAPI.
 - Jinja2.
 - HTMX.
-- Pydantic.
+- Pydantic y `pydantic-settings`.
 - SQLAlchemy.
 - Alembic.
-- PostgreSQL in Docker.
-- SQLite only for lightweight local experiments if needed.
-- Typer for CLI.
-- Python MCP server for agent-assisted import.
-- pytest for tests.
+- PostgreSQL en Docker Compose.
+- SQLite como default local si no se configura `DATABASE_URL`.
+- CLI con `argparse`.
+- pytest para tests.
 
-## Why This Stack
-
-Python is the preferred project language.
-
-FastAPI gives a clean API surface, strong Pydantic integration, and enough flexibility to serve both HTML and JSON.
-
-Jinja2 + HTMX keeps the frontend simple:
-
-- No React build pipeline.
-- Server-rendered forms and previews.
-- Small interactive pieces.
-- Easy to understand and modify.
-
-Docker keeps the dev and production environment consistent.
-
-## Runtime Shape
-
-```text
-docker compose
-├── web        FastAPI + Jinja2 + HTMX
-├── worker     optional later, background jobs/import processing
-└── db         PostgreSQL
-```
-
-The MVP can start with only:
-
-```text
-web + db
-```
-
-## Repository Shape
-
-Recommended structure:
+## Layout Del Repositorio
 
 ```text
 .
@@ -57,14 +24,10 @@ Recommended structure:
 │   ├── main.py
 │   ├── api
 │   │   └── usage_report.py
-│   ├── web
-│   │   ├── routes.py
-│   │   ├── templates
-│   │   └── static
+│   ├── adapters
+│   │   └── codex_local.py
 │   ├── core
-│   │   ├── config.py
-│   │   ├── security.py
-│   │   └── validation.py
+│   │   └── config.py
 │   ├── db
 │   │   ├── models.py
 │   │   ├── session.py
@@ -72,198 +35,287 @@ Recommended structure:
 │   ├── schemas
 │   │   └── usage_report.py
 │   ├── services
-│   │   ├── report_sessions.py
-│   │   ├── report_validation.py
-│   │   └── evidence.py
-│   └── adapters
-│       ├── codex_local.py
-│       ├── opencode_stats.py
-│       ├── csv_import.py
-│       └── manual.py
+│   │   └── report_sessions.py
+│   └── web
+│       ├── routes.py
+│       ├── static
+│       └── templates
 ├── cli
-│   └── main.py
-├── mcp_server
 │   └── main.py
 ├── tests
 ├── docs
 ├── Dockerfile
 ├── docker-compose.yml
-├── pyproject.toml
-└── README.md
+├── alembic.ini
+└── pyproject.toml
 ```
 
-## Web App
+## Aplicacion FastAPI
 
-The web app serves:
+`app/main.py` crea la aplicacion, monta assets estaticos, registra routers y define `/health`.
 
-- Report start page.
-- Report session page.
-- Tool/source picker.
-- Manual entry form.
-- CSV/JSON paste/upload.
-- Pasted stats form.
-- Preview page.
-- Confirmation page.
-- Delete report page.
-- Silver admin review pages.
+En lifespan de startup se llama a:
 
-HTMX should be used for:
+```python
+init_database()
+```
 
-- Adding/removing report rows.
-- CSV/JSON preview refresh.
-- Tool-specific import instructions.
-- Preview validation.
-- Submit confirmation.
+`init_database()` ejecuta `Base.metadata.create_all(bind=engine)`. Esto permite levantar un entorno nuevo con una base vacia, pero Alembic sigue siendo la fuente de migraciones versionadas para deploys y upgrades controlados.
 
-## API
+Routers:
 
-The API should support both the web app and MCP/CLI.
+- `app.api.usage_report.router`, con prefijo `/api/usage-report`.
+- `app.web.routes.router`, con paginas web, collector y admin.
 
-Initial endpoints:
+## Configuracion
+
+`app/core/config.py` define `Settings` con `BaseSettings` y lee `.env` si existe.
+
+Variables soportadas:
+
+```text
+APP_NAME
+APP_BASE_URL
+DATABASE_URL
+SECRET_KEY
+ADMIN_TOKEN
+ENVIRONMENT
+```
+
+Defaults de codigo:
+
+```text
+APP_NAME=Silver Usage Report
+APP_BASE_URL=http://localhost:8000
+DATABASE_URL=sqlite:///./silver_usage_report.db
+SECRET_KEY=dev-secret-change-me
+ADMIN_TOKEN=
+ENVIRONMENT=development
+```
+
+`.env.example` esta orientado a Docker Compose:
+
+```text
+DATABASE_URL=postgresql+psycopg://silver:silver@db:5432/silver_usage_report
+SECRET_KEY=dev-secret-change-me
+ADMIN_TOKEN=
+APP_BASE_URL=http://localhost:8002
+ENVIRONMENT=development
+```
+
+Ver [Configuracion](configuration.md).
+
+## API HTTP
+
+Las rutas API reales son:
 
 ```text
 POST   /api/usage-report/sessions
-GET    /api/usage-report/sessions/{session_id}
-POST   /api/usage-report/sessions/{session_id}/preview
-POST   /api/usage-report/sessions/{session_id}/submit
-DELETE /api/usage-report/sessions/{session_id}
-GET    /api/usage-report/admin/reports
+GET    /api/usage-report/sessions/{session_id}?token=PRIVATE_TOKEN
+GET    /api/usage-report/sessions/{session_id}/status?token=PRIVATE_TOKEN
+POST   /api/usage-report/sessions/{session_id}/preview?token=PRIVATE_TOKEN
+POST   /api/usage-report/sessions/{session_id}/submit?token=PRIVATE_TOKEN
+POST   /api/usage-report/sessions/{session_id}/collector-diagnostics?token=PRIVATE_TOKEN
+DELETE /api/usage-report/sessions/{session_id}?token=PRIVATE_TOKEN
 ```
 
-Preview and submit must use the same Pydantic schema and validation rules.
+Notas de contrato:
 
-## Database
+- `POST /sessions` crea una sesion y devuelve `private_token`.
+- Todas las operaciones sobre una sesion existente requieren `token`.
+- `preview` recibe filas normalizadas y warnings para clientes internos o CLI.
+- `submit` requiere que `report_session_id` coincida con la sesion y que `user_confirmation.preview_shown` sea `true`.
+- `collector-diagnostics` guarda diagnosticos tecnicos sanitizados.
+- `preview`, `submit` y `collector-diagnostics` requieren firma HMAC-SHA256 del
+  body con el `private_token`: `X-Silver-Timestamp` y `X-Silver-Signature`.
+- La firma usa `timestamp + "." + body` y expira a los 5 minutos.
+- La creacion de sesiones devuelve HTTP 429 si se supera el maximo de 5
+  reportes para un mismo candidato identificable.
+- No hay endpoints `/upload`, `/confirm` ni `/api/usage-report/admin/reports`.
 
-Use PostgreSQL in Docker.
+## Web Y HTMX
 
-Core tables:
+Rutas web principales:
 
 ```text
-report_sessions
-- id
-- public_code
-- private_token_hash
-- reporter_label nullable
-- status
-- created_at
-- expires_at
-- submitted_at nullable
-
-usage_report_rows
-- id
-- report_session_id
-- provider
-- tool nullable
-- source
-- period_start
-- period_end
-- model nullable
-- total_tokens nullable
-- input_tokens nullable
-- output_tokens nullable
-- cached_input_tokens nullable
-- reasoning_tokens nullable
-- cost_usd nullable
-- cost_source
-- confidence
-- evidence_json nullable
-- created_at
-
-report_warnings
-- id
-- report_session_id
-- row_id nullable
-- code
-- message
-- created_at
+GET  /
+POST /reports/sessions
+POST /reports/sessions/open
+GET  /reports/sessions/{session_id}?token=PRIVATE_TOKEN
+POST /reports/sessions/{session_id}/submit?token=PRIVATE_TOKEN
+GET  /reports/sessions/{session_id}/report?token=PRIVATE_TOKEN
+POST /reports/sessions/{session_id}/delete?token=PRIVATE_TOKEN
+GET  /reports/sessions/{session_id}/status?token=PRIVATE_TOKEN
+GET  /reports/sessions/{session_id}/preview-panel?token=PRIVATE_TOKEN
+GET  /reports/sessions/{session_id}/report-redirect?token=PRIVATE_TOKEN
+POST /reports/sessions/{session_id}/delete-managed
+GET  /reports/sessions/{session_id}/collector.ps1?token=PRIVATE_TOKEN
 ```
 
-## Schema And Validation
+HTMX se usa para actualizar paneles parciales y redirigir superficies de preview/reporte sin introducir un frontend build pipeline.
 
-Pydantic models are the contract across:
+La pagina privada del candidato queda esperando recepcion de datos despues de
+copiar el comando. Cuando el collector confirma y el submit llega al servidor,
+`/report-redirect` devuelve `HX-Redirect` hacia el detalle del reporte.
 
-- Web forms.
-- API.
-- CLI.
-- MCP server.
-- Adapters.
-- Tests.
+La UI visible esta escrita en espanol. Identificadores de codigo, payloads y campos de integracion se mantienen en ingles.
 
-Validation rules:
+## Admin
 
-- Reject negative token counts.
-- Reject invalid date ranges.
-- Reject unknown source values.
-- Reject sensitive fields.
-- Derive or cap confidence from source/evidence.
-- Require preview before submit.
+Rutas admin:
+
+```text
+GET  /admin
+POST /admin/login
+GET  /admin/reports
+GET  /admin/reports/{session_id}
+POST /admin/reports/{session_id}/delete
+POST /admin/reports/{session_id}/identity
+```
+
+Reglas:
+
+- En produccion, si `ENVIRONMENT=production` y falta `ADMIN_TOKEN`, las rutas admin responden error de configuracion.
+- Con `ADMIN_TOKEN` configurado, el acceso acepta cookie `silver_admin_token` emitida por `/admin/login`.
+- Tambien acepta header `x-admin-token: ADMIN_TOKEN` para usos internos o scripts.
+- En desarrollo, si `ADMIN_TOKEN` esta vacio, las rutas admin quedan abiertas.
+- `/admin/reports` soporta `q`, `page` y `per_page`; con `HX-Request` devuelve
+  solo el partial de resultados para live search.
+- Las metricas de uso por candidato viven en `/admin/reports/{session_id}`; la
+  lista admin muestra estado, identidad, fechas y acciones.
+
+## Modelos Y Persistencia
+
+SQLAlchemy usa un engine global configurado desde `DATABASE_URL` y sesiones por request via dependency `get_db()`.
+
+Tablas:
+
+- `report_sessions`: sesion privada, token hasheado, identidad opcional y estado.
+- `usage_report_rows`: filas agregadas por provider/tool/model/periodo.
+- `report_warnings`: warnings asociados a sesion o fila.
+- `collector_diagnostics`: fallas sanitizadas del collector.
+
+Alembic esta configurado con:
+
+```text
+script_location = app/db/migrations
+```
+
+Migraciones existentes viven en `app/db/migrations/versions`.
+
+## Esquemas Y Validacion
+
+`app/schemas/usage_report.py` define enums y payloads compartidos por API, CLI, servicios y tests.
+
+Validaciones importantes:
+
+- `extra="forbid"` en modelos de entrada.
+- Rechazo de campos sensibles anidados.
+- Conteos de tokens y costos no negativos.
+- `period_end` debe ser posterior a `period_start`.
+- `total_tokens` se calcula desde partes conocidas cuando falta.
+- Submit requiere confirmacion de preview.
+
+Campos sensibles rechazados incluyen `prompt`, `response`, `conversation`, `api_key`, `secret`, `raw_log` y `source_code`.
 
 ## CLI
 
-Typer CLI:
-
-```bash
-silver-usage-report import --session ABC123 --source codex
-silver-usage-report preview --file report.json
-```
-
-The CLI should:
-
-- Run once.
-- Inspect local source via adapters.
-- Show a local preview.
-- Submit only after confirmation.
-- Never run as a daemon.
-
-## MCP Server
-
-Python MCP server:
+El CLI usa `argparse` y se registra como scripts de proyecto:
 
 ```text
-silver_usage_report.preview_report
-silver_usage_report.submit_report
-silver_usage_report.get_report_status
+silver-usage-report = cli.main:main
+silver-usage-collector = cli.main:main
 ```
 
-The MCP server should reuse the same schemas and validation logic as the web API.
+Comandos:
+
+```powershell
+python -m cli.main preview-codex --sessions-dir "$env:USERPROFILE\.codex\sessions" --days 90
+python -m cli.main submit-codex --session SESSION_ID --token PRIVATE_TOKEN --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url http://localhost:8002 --days 90 --yes
+```
+
+El CLI no corre como daemon. Previsualiza localmente, pide confirmacion salvo `--yes`, y luego llama a `preview` y `submit` de la API.
+Cuando la URL incluye `token`, firma los POST privados con los mismos headers
+HMAC que exige la API.
+
+## Collector PowerShell
+
+La web sirve un collector generado por sesion:
+
+```powershell
+irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1?token=PRIVATE_TOKEN" | iex
+```
+
+El script generado embebe:
+
+- `SessionId`.
+- `BaseUrl`, derivado de `APP_BASE_URL`.
+- `PrivateToken`.
+
+El collector envia:
+
+- Submit firmado a `/api/usage-report/sessions/{session_id}/submit?token=...`.
+- Diagnosticos firmados a `/api/usage-report/sessions/{session_id}/collector-diagnostics?token=...`.
+
+El collector no publica preview remoto: la previsualizacion ocurre en la
+terminal del usuario. Despues del submit, la pagina privada se actualiza sola y
+lleva al detalle del reporte.
 
 ## Docker
 
-Development commands should be Docker-first:
+`Dockerfile` usa:
+
+```text
+python:3.13-slim
+pip install --no-cache-dir -e ".[dev]"
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+`docker-compose.yml` define:
+
+```text
+web  build local, uvicorn con --reload, env_file .env.example, puerto 8002:8000
+db   postgres:16-alpine, red interna, volumen postgres-data
+```
+
+PostgreSQL no se publica al host. Desde `web`, la base esta disponible como `db:5432`.
+
+Healthchecks:
+
+- `web`: request HTTP a `http://127.0.0.1:8000/health`.
+- `db`: `pg_isready -U silver -d silver_usage_report`.
+
+Comandos frecuentes:
 
 ```bash
 docker compose up --build
 docker compose run --rm web pytest
 docker compose run --rm web alembic upgrade head
+docker compose logs -f web
 ```
 
-Environment variables:
+## Deploy
 
-```text
-DATABASE_URL=postgresql+psycopg://silver:silver@db:5432/silver_usage_report
-SECRET_KEY=dev-secret
-APP_BASE_URL=http://localhost:8000
+En produccion configurar:
+
+- `ENVIRONMENT=production`.
+- `SECRET_KEY` fuerte y unico.
+- `ADMIN_TOKEN` fuerte y no vacio.
+- `APP_BASE_URL` con URL publica HTTPS.
+- `DATABASE_URL` apuntando a PostgreSQL persistente.
+
+Despues de construir y levantar servicios, ejecutar migraciones:
+
+```bash
+docker compose build
+docker compose up -d
+docker compose run --rm web alembic upgrade head
 ```
 
-No provider admin keys are required for the current MVP.
+Verificar:
 
-## First Implementation Slice
+```bash
+curl -fsS https://TU_DOMINIO/health
+```
 
-The first technical slice should include:
-
-1. Dockerfile and docker-compose.
-2. FastAPI app health route.
-3. Jinja2 base layout.
-4. Report session creation.
-5. Manual row form.
-6. Preview page.
-7. Submit page.
-8. PostgreSQL models and migration.
-9. Pydantic schema tests.
-
-Then add:
-
-1. CSV/JSON paste.
-2. MCP preview/submit server.
-3. Codex local telemetry adapter.
-4. CLI wrapper.
+Ver [Deploy](deployment.md) para checklist completo.

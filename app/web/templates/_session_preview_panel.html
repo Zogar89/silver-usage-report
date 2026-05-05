@@ -1,0 +1,96 @@
+<aside
+  id="report-preview-panel"
+  class="panel"
+  {% if session.status in ["draft", "previewed"] %}
+    hx-get="/reports/sessions/{{ session.id }}/preview-panel?token={{ management_token }}"
+    hx-trigger="every 3s"
+    hx-swap="outerHTML"
+  {% endif %}
+>
+  <div class="panel-heading">
+    <p class="eyebrow">Previsualizacion</p>
+    <h2>Datos compartidos con Silver</h2>
+  </div>
+  {% if summary.row_count %}
+    <p class="muted">Este es el detalle completo del payload agregado asociado a esta sesion.</p>
+    <dl class="preview-summary">
+      <dt>Filas</dt>
+      <dd>{{ summary.row_count }}</dd>
+      <dt>Tokens totales</dt>
+      <dd>{{ summary.total_tokens }}</dd>
+      <dt>Costo</dt>
+      <dd>{{ summary.total_cost_usd | usd if summary.rows | selectattr("cost_usd") | list else "No disponible en telemetria local" }}</dd>
+    </dl>
+    <div class="table-wrap">
+      <h3>Filas previsualizadas</h3>
+      <table class="dense-table payload-table">
+        <thead>
+          <tr>
+            <th>Periodo</th>
+            <th>Proveedor</th>
+            <th>Herramienta</th>
+            <th>Modelo</th>
+            <th>Fuente</th>
+            <th>Requests</th>
+            <th>Input total</th>
+            <th>Input nuevo</th>
+            <th>Input cacheado</th>
+            <th>Output</th>
+            <th>Razonamiento</th>
+            <th>Tokens totales</th>
+            <th>Costo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in summary.rows %}
+            <tr>
+              <td>{{ row.period_start|date_short }}</td>
+              <td>{{ row.provider }}</td>
+              <td>{{ row.tool or "other" }}</td>
+              <td>{{ row.model or "sin modelo" }}</td>
+              <td>{{ row.source }}</td>
+              <td>{{ row.request_count or 0 }}</td>
+              {% set row_input_nuevo = row.input_tokens or 0 %}
+              {% set row_input_cacheado = row.cached_input_tokens or 0 %}
+              {% set row_input_total = row_input_nuevo + row_input_cacheado %}
+              <td>{{ row_input_total }}</td>
+              <td>{{ row_input_nuevo }}</td>
+              <td>{{ row_input_cacheado }}</td>
+              <td>{{ row.output_tokens or 0 }}</td>
+              <td>{{ row.reasoning_tokens or 0 }}</td>
+              <td>{{ row.total_tokens or 0 }}</td>
+              <td>{{ row.cost_usd | usd if row.cost_usd is not none else "Sin costo" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if summary.warnings %}
+      <ul class="warning-list">
+        {% for warning in summary.warnings %}
+          <li>{{ warning.code }}: {{ warning.message }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+    {% if session.status == "previewed" %}
+      <form method="post" action="/reports/sessions/{{ session.id }}/submit?token={{ management_token }}">
+        <button type="submit">Confirmar envio</button>
+      </form>
+    {% endif %}
+    {% if session.status == "submitted" %}
+      <form method="post" action="/reports/sessions/{{ session.id }}/delete?token={{ management_token }}">
+        <button class="secondary" type="submit">Eliminar datos del reporte</button>
+      </form>
+    {% endif %}
+  {% else %}
+    <ul class="check-list">
+      <li>Proveedor, herramienta y modelo cuando se conozcan</li>
+      <li>Periodo reportado y conteos agregados de tokens</li>
+      <li>Fuente de costo, confianza y metadata de evidencia</li>
+    </ul>
+  {% endif %}
+  {% if session.status == "deleted" %}
+    <p class="muted">0 filas retenidas.</p>
+  {% endif %}
+  <p class="muted">Prompts, respuestas, codigo, logs crudos, variables de entorno y API keys quedan fuera del limite del reporte.</p>
+</aside>

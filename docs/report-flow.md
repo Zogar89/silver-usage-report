@@ -1,168 +1,124 @@
-# Report Flow
+# Flujo De Reporte
 
-Silver Usage Report is web-first.
+Silver Usage Report tiene un solo flujo candidato vigente: sesión web privada y
+collector PowerShell de Codex local.
 
-The web app is the front door. Local assistants, CLI, MCP, pasted stats, CSV, screenshots, and manual entry are import methods inside the web report flow.
+## Alcance Actual
 
-## Scope
+Incluido:
 
-Current scope:
+- Self-report individual.
+- Sesión privada con `PRIVATE_TOKEN`.
+- Collector one-shot servido por la web.
+- Lectura local de `~/.codex/sessions/**/rollout-*.jsonl`.
+- Agregado por día/modelo de los últimos 90 días.
+- Preview local en PowerShell.
+- Confirmación explícita antes de enviar.
+- Submit firmado de filas agregadas.
+- Redirección automática al detalle cuando llega el reporte.
+- Panel privado de estado y borrado.
+- Panel admin de Silver.
 
-- Individual employee self-report.
-- External participant self-report.
-- Community/open-call reporting.
-- Local tool usage visible to the user.
-- Manual fallback when automation fails.
+Fuera del producto actual:
 
-Out of scope:
+- Cualquier flujo distinto del collector Codex local.
+- Descarga de binarios.
+- Tracker o daemon permanente.
+- Importaciones con claves provider/org/admin.
 
-- Company-wide imports.
-- Team analytics.
-- Enterprise exports.
-- Provider org/admin APIs.
-- Asking employees for admin keys.
-- Employer surveillance or performance scoring.
-
-## No Required Login For Reporters
-
-The reporter should not need to create an account for the MVP.
-
-Flow:
-
-```text
-open.silver.dev/usage-report
-→ Create report session
-→ Get short code / private link
-→ Import or enter usage
-→ Preview
-→ Confirm
-→ Submit to Silver
-```
-
-The report session can collect optional identity fields when Silver needs them:
-
-- Name.
-- Email.
-- X handle.
-- GitHub handle.
-- Freeform label.
-
-These fields should be optional unless a specific Silver campaign requires them.
-
-Silver admins need login to review submitted reports. Reporters do not.
-
-## MVP User Flow
-
-1. User opens `open.silver.dev/usage-report`.
-2. Web app creates a report session.
-3. User selects tools they use:
-   - Codex Desktop / Codex VS Code.
-   - Claude Code.
-   - Cursor.
-   - Other / manual fallback.
-4. Web app recommends the best available import method for each tool.
-5. User imports or enters usage.
-6. Web app shows normalized preview.
-7. User confirms.
-8. Silver receives aggregate rows only.
-
-## Import Methods
-
-### Local Assistant / MCP
-
-Best for supported local tools.
-
-The web app gives the user a prompt and report code. The user pastes the prompt into Codex, Claude Code, or a Cursor-oriented local workflow when available.
-
-The agent inspects local usage metadata, builds normalized rows, and sends them to Silver through the MCP server after preview.
-
-### One-Shot CLI
-
-Best when the user is comfortable running a command.
-
-```bash
-npx -y @silver/usage-report import --session ABC123
-```
-
-The CLI should run once, show a preview, and exit. It must not install an ongoing tracker or daemon.
-
-### Pasted Stats
-
-Best for supported tools with visible stats or export text.
-
-The web app asks the user to paste stats output. The server or browser parser extracts fields and labels the row source.
-
-### CSV / JSON
-
-Best for structured user exports.
-
-The web app validates schema, displays parsed rows, and marks source/confidence appropriately.
-
-### Screenshot
-
-Useful fallback when the tool only shows usage in UI.
-
-OCR can be added later. In the MVP, screenshots can be stored as optional evidence only if the user explicitly opts in.
-
-### Manual Entry
-
-Universal fallback.
-
-Manual rows are useful but low confidence. They must be labeled as manual and never mixed silently with computed rows.
-
-## Source Router
-
-The web app should not ask "connect your provider" first.
-
-It should ask:
+## Flujo Candidato
 
 ```text
-What do you use?
+Crear sesión web
+→ abrir URL privada con token
+→ copiar comando PowerShell
+→ leer telemetría local Codex
+→ mostrar preview local
+→ confirmar en terminal
+→ firmar y enviar filas agregadas
+→ la web detecta recepción
+→ ver detalle e insights del reporte
 ```
 
-Then route:
+Comando generado:
+
+```powershell
+irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1?token=PRIVATE_TOKEN" | iex
+```
+
+El collector no instala nada. Corre una vez, termina y deja el control al usuario.
+
+## Datos Compartidos
+
+El submit contiene solamente filas normalizadas con:
+
+- provider;
+- tool;
+- source `codex_local_telemetry`;
+- periodo;
+- modelo cuando exista;
+- request count;
+- tokens input, cached input, output, reasoning y total;
+- `cost_source: "unknown"`;
+- confidence;
+- evidencia agregada.
+
+No se suben prompts, respuestas, código fuente, logs crudos, variables de
+entorno, API keys ni rutas locales completas.
+
+## Lectura De Métricas En La UI
+
+La UI usa nombres consistentes para evitar confundir volumen total con partes del
+input:
+
+- `Tokens totales`: total agregado de la fila, día o reporte.
+- `Input total`: input completo informado.
+- `Input nuevo`: input no cacheado.
+- `Input cacheado`: input servido desde caché.
+- `Output`: tokens de salida.
+- `Razonamiento`: tokens de razonamiento cuando existen.
+
+La app no asume que todas las tomas de Codex tengan la misma semántica. Si
+`cached_input_tokens` parece estar incluido dentro de `input_tokens`, calcula
+`Input nuevo = input_tokens - cached_input_tokens`. Si `total_tokens` cierra
+mejor tratando caché como bucket separado, calcula `Input total = input_tokens +
+cached_input_tokens`. La inferencia se hace contra `total_tokens`.
+
+El resumen del detalle muestra `Tokens por día activo`, no tokens por request. Se
+calcula como `tokens totales / días con uso`, porque el `request_count` del
+collector representa eventos o filas agregadas y no siempre equivale a llamadas
+individuales al modelo.
+
+La serie diaria permite ocultar o mostrar `Input cacheado` para distinguir uso
+nuevo de reutilización de caché. Las fechas con hora se muestran en horario de
+Argentina; los buckets diarios conservan su día de reporte.
+
+## Estado Y Gestión
+
+Cada sesión tiene un link privado:
 
 ```text
-Codex → MCP/CLI local telemetry.
-Claude Code → local stats/log investigation or manual.
-Cursor → export/local/manual.
-Other → CSV/JSON/manual.
+/reports/sessions/SESSION_ID?token=PRIVATE_TOKEN
 ```
 
-## Preview Requirements
+Ese link permite ver estado, totales, filas recibidas y borrar datos agregados.
+Sin el token privado no se puede gestionar la sesión.
 
-Every import path must end in the same preview:
+Los envios de datos desde collector/CLI tambien requieren firma HMAC del body.
+El token via query identifica la sesion; la firma prueba posesion del token para
+ese payload y reduce replay.
+
+## Admin
+
+Silver revisa reportes en:
 
 ```text
-Tool: Codex Desktop
-Provider: OpenAI
-Period: 2026-05-01 to 2026-05-04
-Total tokens: 34,807,293
-Source: codex_local_telemetry
-Confidence: medium
-Evidence: 779 rows, deduped by turn_id
-
-This will be sent:
-provider, tool, model, period, token counts, cost if available, source, confidence, evidence metadata.
-
-This will not be sent:
-prompts, responses, source code, raw logs, API keys, full file paths.
+/admin/reports
 ```
 
-## Silver Review View
+En producción debe existir `ADMIN_TOKEN`. El admin puede entrar por `/admin` o
+usar el header `x-admin-token`.
 
-Silver needs an internal review view for submitted reports.
-
-It should show:
-
-- Reporter label or anonymous/private link.
-- Period.
-- Provider/tool/model breakdown.
-- Total tokens.
-- Cost if available.
-- Source.
-- Confidence.
-- Evidence metadata.
-- Warnings.
-
-It should not show hidden prompts, raw logs, source code, or private local paths because those should never be uploaded by default.
+La lista admin soporta busqueda en vivo y paginacion. Las metricas de uso de IA
+se revisan dentro del detalle de cada reporte/candidato, junto con el grafico de
+serie temporal por tipo de token.

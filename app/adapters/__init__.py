@@ -1,0 +1,1 @@
+"""Local usage source adapters."""
