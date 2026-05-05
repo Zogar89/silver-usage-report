@@ -124,7 +124,7 @@ HMAC-SHA256 sobre el body crudo usando el `PRIVATE_TOKEN`. No hay una variable d
 entorno global para esta firma: cada sesion usa su propio token privado.
 
 Para controlar abuso, la app limita a 5 sesiones por candidato identificable
-cuando recibe datos como `candidate_ref`, email, GitHub, X o nombre.
+cuando recibe datos como `candidate_ref`, email, X o nombre.
 
 ## Migraciones
 

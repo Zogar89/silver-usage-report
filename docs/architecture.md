@@ -70,7 +70,7 @@ usando ese token y enviar `X-Silver-Timestamp` + `X-Silver-Signature`. El
 timestamp tiene una ventana de 5 minutos.
 
 La creacion de sesiones limita a 5 reportes por candidato cuando existen
-identificadores comparables como `candidate_ref`, email, GitHub, X o nombre.
+identificadores comparables como `candidate_ref`, email, X o nombre.
 
 Rutas API reales:
 
@@ -146,7 +146,6 @@ report_sessions
 - private_token_hash
 - reporter_label nullable
 - reporter_email nullable
-- github_handle nullable
 - x_handle nullable
 - candidate_ref nullable
 - campaign_ref nullable

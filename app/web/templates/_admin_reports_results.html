@@ -25,7 +25,7 @@
         <td>{{ report.candidate_ref or "Sin informar" }}</td>
         <td>
           <strong>{{ report.reporter_label or "Sin nombre" }}</strong>
-          <span class="subtle-line">{{ report.reporter_email or report.github_handle or "Sin contacto" }}</span>
+          <span class="subtle-line">{{ report.reporter_email or report.x_handle or "Sin contacto" }}</span>
         </td>
         <td>{{ report.total_tokens | token_amount }}</td>
         <td>{{ report.total_cost_usd | usd }}</td>
@@ -77,6 +77,6 @@
 {% else %}
   <div class="empty-state">
     <h2>No hay reportes para esta busqueda</h2>
-    <p>Proba con codigo, candidato, email, GitHub o estado.</p>
+    <p>Proba con codigo, candidato, email o estado.</p>
   </div>
 {% endif %}

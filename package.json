@@ -1,0 +1,13 @@
+{
+  "name": "silver-usage-report",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:css": "tailwindcss -i ./app/web/static/styles.tailwind.css -o ./app/web/static/styles.css --minify",
+    "watch:css": "tailwindcss -i ./app/web/static/styles.tailwind.css -o ./app/web/static/styles.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.0.0",
+    "tailwindcss": "^4.0.0"
+  }
+}

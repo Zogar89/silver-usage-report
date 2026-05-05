@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ title }} - Silver Usage Report</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}?v=20260505-home-form-width">
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}?v=20260505-silver-tailwind-v1">
     <script
       src="https://unpkg.com/htmx.org@2.0.4"
       integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
@@ -13,11 +13,14 @@
   </head>
   <body>
     <header class="site-header">
-      <a class="brand" href="/">Open Silver</a>
+      <a class="brand" href="/" aria-label="Silver Usage Report">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span>Silver.dev</span>
+      </a>
       <nav aria-label="Principal">
-        <a href="https://open.silver.dev/">Inicio</a>
-        <a href="https://open.silver.dev/#talent">Para talento</a>
-        <a href="https://open.silver.dev/#companies">Para empresas</a>
+        <a href="/">Why us</a>
+        <a href="/#saved-reports">Services</a>
+        <a href="https://silver.dev/">Blog</a>
       </nav>
     </header>
     <main>
