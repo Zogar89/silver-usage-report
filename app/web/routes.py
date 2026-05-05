@@ -163,6 +163,23 @@ def report_session_status(
     )
 
 
+@router.get("/reports/sessions/{session_id}/preview-panel", response_class=HTMLResponse)
+def report_session_preview_panel(
+    session_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    session = _get_session_or_404(db, session_id)
+    return templates.TemplateResponse(
+        request,
+        "_session_preview_panel.html",
+        {
+            "session": session,
+            "summary": summarize_report_session(session),
+        },
+    )
+
+
 @router.post("/reports/sessions/{session_id}/delete-managed", response_class=HTMLResponse)
 async def delete_managed_report_session(
     session_id: str,

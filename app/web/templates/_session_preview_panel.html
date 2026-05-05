@@ -1,0 +1,76 @@
+<aside
+  id="report-preview-panel"
+  class="panel"
+  {% if session.status in ["draft", "previewed"] %}
+    hx-get="/reports/sessions/{{ session.id }}/preview-panel"
+    hx-trigger="every 3s"
+    hx-swap="outerHTML"
+  {% endif %}
+>
+  <div class="panel-heading">
+    <p class="eyebrow">Previsualizacion</p>
+    <h2>Datos compartidos con Silver</h2>
+  </div>
+  {% if summary.row_count %}
+    <dl class="preview-summary">
+      <dt>Filas</dt>
+      <dd>{{ summary.row_count }}</dd>
+      <dt>Tokens totales</dt>
+      <dd>{{ summary.total_tokens }}</dd>
+      <dt>Confianza</dt>
+      <dd>{{ summary.rows[0].confidence }}</dd>
+    </dl>
+    <div class="table-wrap">
+      <h3>Filas previsualizadas</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Proveedor</th>
+            <th>Herramienta</th>
+            <th>Fuente</th>
+            <th>Tokens</th>
+            <th>Confianza</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in summary.rows %}
+            <tr>
+              <td>{{ row.provider }}</td>
+              <td>{{ row.tool or "other" }}</td>
+              <td>{{ row.source }}</td>
+              <td>{{ row.total_tokens or 0 }}</td>
+              <td>{{ row.confidence }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if summary.warnings %}
+      <ul class="warning-list">
+        {% for warning in summary.warnings %}
+          <li>{{ warning.code }}: {{ warning.message }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+    {% if session.status == "previewed" %}
+      <form method="post" action="/reports/sessions/{{ session.id }}/submit">
+        <button type="submit">Confirmar envio</button>
+      </form>
+    {% endif %}
+    {% if session.status == "submitted" %}
+      <form method="post" action="/reports/sessions/{{ session.id }}/delete">
+        <button class="secondary" type="submit">Eliminar datos del reporte</button>
+      </form>
+    {% endif %}
+  {% else %}
+    <ul class="check-list">
+      <li>Proveedor, herramienta y modelo cuando se conozcan</li>
+      <li>Periodo reportado y conteos agregados de tokens</li>
+      <li>Fuente de costo, confianza y metadata de evidencia</li>
+    </ul>
+  {% endif %}
+  {% if session.status == "deleted" %}
+    <p class="muted">0 filas retenidas.</p>
+  {% endif %}
+  <p class="muted">Prompts, respuestas, codigo, logs crudos, variables de entorno y API keys quedan fuera del limite del reporte.</p>
+</aside>

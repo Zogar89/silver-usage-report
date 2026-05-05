@@ -25,6 +25,8 @@ def test_report_session_page_shows_manual_entry_preview_surface():
     assert "Importar JSON" in html
     assert "Previsualizar reporte" in html
     assert "Datos compartidos con Silver" in html
+    assert f'/reports/sessions/{_session_id_from(html)}/preview-panel' in html
+    assert 'hx-trigger="every 3s"' in html
 
 
 def test_report_session_page_prioritizes_local_agent_cli_import():
@@ -128,6 +130,55 @@ def test_manual_web_flow_previews_submits_and_deletes_report():
     assert deleted.status_code == 200
     assert "Reporte eliminado" in deleted.text
     assert "0 filas retenidas" in deleted.text
+
+
+def test_report_session_preview_panel_updates_after_external_submit():
+    client = TestClient(app)
+    response = client.post("/reports/sessions")
+    session_id = _session_id_from(response.text)
+
+    empty_panel = client.get(f"/reports/sessions/{session_id}/preview-panel")
+
+    assert empty_panel.status_code == 200
+    assert "Proveedor, herramienta y modelo" in empty_panel.text
+
+    preview = client.post(
+        f"/api/usage-report/sessions/{session_id}/preview",
+        json={
+            "rows": [
+                {
+                    "provider": "openai",
+                    "tool": "codex",
+                    "source": "json",
+                    "period_start": "2026-05-01T00:00:00Z",
+                    "period_end": "2026-05-02T00:00:00Z",
+                    "period_width": "1d",
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                    "cost_source": "manual",
+                    "confidence": "medium",
+                }
+            ]
+        },
+    )
+
+    assert preview.status_code == 200
+
+    updated_panel = client.get(f"/reports/sessions/{session_id}/preview-panel")
+
+    assert updated_panel.status_code == 200
+    assert "Filas previsualizadas" in updated_panel.text
+    assert "150" in updated_panel.text
+    assert "Confirmar envio" in updated_panel.text
+
+    submitted = client.post(f"/reports/sessions/{session_id}/submit")
+
+    assert submitted.status_code == 200
+
+    submitted_panel = client.get(f"/reports/sessions/{session_id}/preview-panel")
+
+    assert "Eliminar datos del reporte" in submitted_panel.text
+    assert "hx-trigger=\"every 3s\"" not in submitted_panel.text
 
 
 def test_csv_web_flow_previews_rows_in_table():
