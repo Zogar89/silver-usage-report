@@ -12,7 +12,7 @@ def _session_id_from(html: str) -> str:
     return html[start:end]
 
 
-def test_report_session_page_shows_manual_entry_preview_surface():
+def test_report_session_page_shows_collector_preview_surface():
     client = TestClient(app)
 
     response = client.post("/reports/sessions")
@@ -20,13 +20,13 @@ def test_report_session_page_shows_manual_entry_preview_surface():
     assert response.status_code == 200
     html = response.text
     assert "Codigo de sesion" in html
-    assert "Carga manual" in html
-    assert "Importar CSV" in html
-    assert "Importar JSON" in html
-    assert "Previsualizar reporte" in html
+    assert "Importacion con agente local" in html
     assert "Datos compartidos con Silver" in html
     assert f'/reports/sessions/{_session_id_from(html)}/preview-panel' in html
     assert 'hx-trigger="every 3s"' in html
+    assert "Carga manual" not in html
+    assert "Importar CSV" not in html
+    assert "Importar JSON" not in html
 
 
 def test_report_session_page_prioritizes_local_agent_cli_import():
@@ -43,7 +43,6 @@ def test_report_session_page_prioritizes_local_agent_cli_import():
     assert f'irm "http://testserver/reports/sessions/{session_id}/collector.ps1" | iex' in rendered_text
     assert "Descarga el collector y lo ejecuta desde una carpeta temporal." in html
     assert "YOU" not in html
-    assert html.index("Importacion con agente local") < html.index("Carga manual")
 
 
 def test_report_session_collector_script_downloads_and_runs_collector():
@@ -74,6 +73,10 @@ def test_home_page_uses_spanish_copy_and_language_attribute():
     assert "Para talento" in html
     assert "Enviar reporte" in html
     assert "metricas agregadas" in html
+    assert "Importacion local" in html
+    assert "Previsualizacion" in html
+    assert "Manual" not in html
+    assert "CSV or JSON" not in html
     assert "Start report" not in html
     assert "For Talent" not in html
 
@@ -97,27 +100,32 @@ def test_report_status_page_requires_private_token_and_shows_management_actions(
     assert "Eliminar datos del reporte" in allowed.text
 
 
-def test_manual_web_flow_previews_submits_and_deletes_report():
+def test_web_flow_submits_and_deletes_report_after_external_preview():
     client = TestClient(app)
     response = client.post("/reports/sessions")
     session_id = _session_id_from(response.text)
 
     preview = client.post(
-        f"/reports/sessions/{session_id}/preview",
-        data={
-            "provider": "openai",
-            "tool": "codex",
-            "period_start": "2026-05-01T00:00:00Z",
-            "period_end": "2026-05-02T00:00:00Z",
-            "input_tokens": "100",
-            "output_tokens": "50",
+        f"/api/usage-report/sessions/{session_id}/preview",
+        json={
+            "rows": [
+                {
+                    "provider": "openai",
+                    "tool": "codex",
+                    "source": "json",
+                    "period_start": "2026-05-01T00:00:00Z",
+                    "period_end": "2026-05-02T00:00:00Z",
+                    "period_width": "1d",
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                    "cost_source": "manual",
+                    "confidence": "medium",
+                }
+            ]
         },
     )
 
     assert preview.status_code == 200
-    assert "Previsualizacion lista" in preview.text
-    assert "150" in preview.text
-    assert "Confirmar envio" in preview.text
 
     submitted = client.post(f"/reports/sessions/{session_id}/submit")
 
@@ -130,6 +138,20 @@ def test_manual_web_flow_previews_submits_and_deletes_report():
     assert deleted.status_code == 200
     assert "Reporte eliminado" in deleted.text
     assert "0 filas retenidas" in deleted.text
+
+
+def test_removed_web_fallback_routes_are_not_available():
+    client = TestClient(app)
+    response = client.post("/reports/sessions")
+    session_id = _session_id_from(response.text)
+
+    manual = client.post(f"/reports/sessions/{session_id}/preview")
+    csv = client.post(f"/reports/sessions/{session_id}/preview-csv")
+    json_preview = client.post(f"/reports/sessions/{session_id}/preview-json")
+
+    assert manual.status_code == 404
+    assert csv.status_code == 404
+    assert json_preview.status_code == 404
 
 
 def test_report_session_preview_panel_updates_after_external_submit():
@@ -179,49 +201,3 @@ def test_report_session_preview_panel_updates_after_external_submit():
 
     assert "Eliminar datos del reporte" in submitted_panel.text
     assert "hx-trigger=\"every 3s\"" not in submitted_panel.text
-
-
-def test_csv_web_flow_previews_rows_in_table():
-    client = TestClient(app)
-    response = client.post("/reports/sessions")
-    session_id = _session_id_from(response.text)
-
-    preview = client.post(
-        f"/reports/sessions/{session_id}/preview-csv",
-        data={
-            "csv_text": (
-                "provider,tool,source,period_start,period_end,period_width,input_tokens,output_tokens,cost_source,confidence\n"
-                "openai,codex,csv,2026-05-01T00:00:00Z,2026-05-02T00:00:00Z,1d,100,50,manual,medium\n"
-            )
-        },
-    )
-
-    assert preview.status_code == 200
-    assert "Previsualizacion CSV lista" in preview.text
-    assert "Filas previsualizadas" in preview.text
-    assert "codex" in preview.text
-    assert "150" in preview.text
-
-
-def test_json_web_flow_previews_rows_in_table():
-    client = TestClient(app)
-    response = client.post("/reports/sessions")
-    session_id = _session_id_from(response.text)
-
-    preview = client.post(
-        f"/reports/sessions/{session_id}/preview-json",
-        data={
-            "json_text": (
-                '{"rows":[{"provider":"openai","tool":"codex","source":"json",'
-                '"period_start":"2026-05-01T00:00:00Z","period_end":"2026-05-02T00:00:00Z",'
-                '"period_width":"1d","input_tokens":100,"output_tokens":50,'
-                '"cost_source":"manual","confidence":"medium"}]}'
-            )
-        },
-    )
-
-    assert preview.status_code == 200
-    assert "Previsualizacion JSON lista" in preview.text
-    assert "Filas previsualizadas" in preview.text
-    assert "json" in preview.text
-    assert "150" in preview.text

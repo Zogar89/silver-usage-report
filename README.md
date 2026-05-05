@@ -78,12 +78,10 @@ The first useful version should optimize for report completion:
 - Web report session hosted under `open.silver.dev`.
 - Short-lived report token or session code.
 - One-shot CLI/MCP helper for local tool import.
-- Browser/manual import path for CSV/JSON and copy-paste data.
-- Manual, paste, CSV, and JSON imports as the universal fallback.
 - Codex local telemetry adapter as the first validated local-source candidate.
 - Cursor, Claude Code, and Codex as the three MVP tools.
 - Normalized report preview before submission.
-- Confidence labels for local telemetry, pasted stats, screenshots, estimated, or manually entered data.
+- Confidence labels for local telemetry and future supported sources.
 - Admin/review view for Silver to inspect submitted reports.
 - Deletion flow for submitted aggregate data.
 
@@ -193,13 +191,13 @@ POST   /api/usage-report/sessions/{session_id}/submit
 DELETE /api/usage-report/sessions/{session_id}
 ```
 
-Preview a local JSON report file:
+Preview a local JSON report file for development/import testing:
 
 ```bash
 python -m cli.main preview report.json
 ```
 
-Preview a local CSV report file:
+Preview a local CSV report file for development/import testing:
 
 ```bash
 python -m cli.main preview-csv report.csv
@@ -218,7 +216,7 @@ do not need Python installed:
 .\silver-usage-collector.exe preview-codex --sessions-dir "$env:USERPROFILE\.codex\sessions" --days 30
 ```
 
-Submit a local JSON report after explicit confirmation:
+Submit a local JSON report after explicit confirmation in development:
 
 ```bash
 python -m cli.main submit --session SESSION_ID --file report.json --base-url http://localhost:8002 --yes
@@ -255,8 +253,8 @@ macOS, and Linux runners.
 Agent-assisted imports should use the prompt template at `mcp_server/prompts/agent-assisted-import.md`.
 
 The web session page presents a one-line Windows command that downloads and runs
-the standalone Codex collector. Manual rows plus CSV and JSON paste previews
-remain fallback paths when local telemetry is unavailable.
+the standalone Codex collector. Manual, CSV, and JSON web fallbacks are not part
+of the current candidate-facing flow.
 
 Codex collector reports default to the last 30 days and aggregate usage by
 day/model. The preview shows request count, input tokens, cached input tokens,
@@ -285,7 +283,7 @@ Expected flow:
 
 ## Key Design Documents
 
-- [Report flow](docs/report-flow.md): web-first MVP, no required reporter login, import methods, and Silver review.
+- [Report flow](docs/report-flow.md): web-first MVP, no required reporter login, collector-first import, and Silver review.
 - [Standalone collector](docs/collector.md): candidate binary usage, local build, release workflow, and privacy notes.
 - [MCP-assisted import](docs/mcp-assisted-import.md): prompt + MCP flow for local agents like Codex or Claude Code.
 - [Technical architecture](docs/technical-architecture.md): Docker, FastAPI, Jinja2, HTMX, database, CLI, and MCP layout.

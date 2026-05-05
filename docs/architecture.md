@@ -19,23 +19,21 @@ See [Technical architecture](technical-architecture.md) for the implementation-l
 
 Silver Usage Report has one core job: turn heterogeneous AI usage sources into a normalized report that a user can safely submit to Silver.
 
-The system should support several intake paths:
+The current candidate-facing system is collector-first:
 
-- Browser/provider import for providers with usable usage APIs.
-- Local one-shot CLI import for local logs and provider keys in environment variables.
-- CSV/JSON/manual fallback for unsupported sources.
+- Web report session.
+- Local one-shot collector for supported local telemetry.
+- Live preview panel that updates when rows arrive.
 - Future MCP workflow that wraps the same importer core.
 
 ```mermaid
 flowchart LR
   User["User"] --> Web["Web report flow"]
   Web --> Session["Report session"]
-  User --> CLI["One-shot CLI importer"]
-  User --> Manual["CSV / JSON / manual input"]
-  CLI --> Sources["Local tool telemetry or pasted stats"]
-  Sources --> CLI
-  CLI --> Preview["Preview"]
-  Manual --> Preview
+  User --> Collector["One-shot collector"]
+  Collector --> Sources["Local tool telemetry"]
+  Sources --> Collector
+  Collector --> Preview["Preview"]
   Preview --> Upload["Confirmed report upload"]
   Upload --> API["Silver report API"]
   API --> DB["Report database"]
@@ -50,10 +48,9 @@ Responsibilities:
 
 - Create report sessions.
 - Explain what Silver needs and why.
-- Display provider/tool setup instructions.
+- Display collector instructions.
 - Accept normalized report payloads.
-- Provide CSV/JSON/manual fallback.
-- Render the report preview.
+- Render the live report preview.
 - Let users confirm or delete submitted reports.
 
 ### Report Session API
@@ -96,14 +93,8 @@ irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1" | iex
 
 ### Manual, CSV, And JSON Import
 
-Responsibilities:
-
-- Let unsupported users still complete a report.
-- Provide a small schema and template.
-- Label manual data with lower confidence.
-- Avoid blocking the main flow on source-specific automation gaps.
-
-This matters because Silver needs broad coverage more than perfect automation on day one.
+Status: deferred. The current web flow does not expose manual, CSV, or JSON
+fallbacks to candidates.
 
 ### MCP Importer
 

@@ -51,19 +51,18 @@ confirmar, verificar estado con link privado y borrar datos agregados.
 - UI web en español.
 - Visual integrado con Open Silver.
 
-## Fase 2: Fallback Universal Manual/CSV/JSON
+## Fase 2: Importación Local Como Camino Único
 
-Estado: completo.
+Estado: activo.
 
-Resultado: nadie queda bloqueado por no tener collector o por usar una herramienta
-sin parser automático.
+Resultado: la web de candidato queda enfocada en el collector/agente local. Los
+fallbacks manual, CSV y JSON no se muestran ni se usan por ahora.
 
-- Form manual.
-- Preview CSV.
-- Preview JSON.
+- Página de sesión con comando de collector.
+- Panel de preview que se actualiza cuando el collector envía datos.
+- Confirmación web después de recibir filas agregadas.
 - Validación de fechas, tokens, confianza y campos sensibles.
 - Cálculo derivado de `total_tokens`.
-- Filas manuales degradadas a baja confianza.
 - Fixtures sintéticos y cobertura de importación.
 
 ## Fase 3: CLI Y Collector Standalone
@@ -110,7 +109,7 @@ Pendiente:
 Estado: Codex avanzado; resto pendiente.
 
 Resultado actual: Codex tiene adapter útil sobre session rollouts; Cursor y
-Claude Code todavía dependen de fallback manual/CSV/JSON.
+Claude Code quedan pendientes hasta tener integración local propia.
 
 Hecho para Codex:
 
@@ -188,12 +187,11 @@ Estado: futuro.
 El orden actual sigue siendo:
 
 1. Web report session.
-2. Fallback manual/CSV/JSON.
-3. Collector one-shot.
-4. Codex local adapter.
-5. MCP instalable.
-6. Claude Code y Cursor.
-7. Admin hardening y campañas.
+2. Collector one-shot.
+3. Codex local adapter.
+4. MCP instalable.
+5. Claude Code y Cursor.
+6. Admin hardening y campañas.
 
 La decisión de no arrancar por APIs provider/org/admin sigue vigente: son útiles
 para compañías, pero no resuelven bien el caso de un candidato individual que no

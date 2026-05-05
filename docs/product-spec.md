@@ -8,7 +8,7 @@ The product should answer:
 
 - How can a user report their AI token usage to Silver quickly?
 - What tools/providers contributed to that usage?
-- How much of the report is actual provider data versus estimated or manual data?
+- How much of the report comes from supported local telemetry?
 - Can Silver compare reports across people who use different AI tools?
 - Can the user submit useful metrics without exposing private data?
 
@@ -99,7 +99,6 @@ Secondary users:
 - Let a user submit a useful usage report within minutes.
 - Avoid requiring ongoing background tracking.
 - Support one-shot local import for tools that expose local usage data.
-- Provide manual/CSV fallback when automation is unavailable.
 - Avoid relying on provider org/admin APIs.
 - Normalize data across providers and tools.
 - Preserve a clear privacy boundary.
@@ -124,16 +123,13 @@ Secondary users:
 
 1. User visits the Silver Usage Report web app.
 2. The app creates a short-lived report session.
-3. User chooses an import method:
-   - Run the one-shot CLI importer.
-   - Paste stats from a supported tool.
-   - Upload CSV/JSON.
-   - Enter manual totals for unsupported tools.
-4. User previews normalized usage before final submission.
-5. User sees confidence and source labels for each row.
-6. User confirms submission.
-7. Silver receives aggregate report data.
-8. User can delete the submitted report.
+3. User runs the one-shot local collector command.
+4. The web page updates when aggregate rows arrive.
+5. User previews normalized usage before final submission.
+6. User sees confidence and source labels for each row.
+7. User confirms submission.
+8. Silver receives aggregate report data.
+9. User can delete the submitted report.
 
 Reporter login is not required for the MVP. The report session should use a short code and private management link. Silver admins need login for the internal review view.
 
@@ -149,10 +145,7 @@ and campaign ref. These fields are visible in admin review and detail pages.
 
 - Report start screen.
 - Report session page.
-- Import method picker.
-- Tool-specific import instructions.
 - CLI instructions page.
-- CSV/JSON/manual fallback form.
 - Report preview table.
 - Confirmation screen.
 - Silver admin report review.
@@ -186,14 +179,15 @@ third-party product names.
 
 ## MVP Import Strategy
 
-The MVP should support multiple ways for an individual to report usage:
+The candidate-facing MVP should support one primary way for an individual to
+report usage:
 
-- Local MCP/assistant import for supported tools.
-- One-shot CLI helper.
-- Pasted stats or exports when supported.
-- CSV/JSON import.
-- Manual entry.
-- Optional screenshot evidence only with explicit opt-in.
+- One-shot local collector for supported tools.
+- Live web preview when aggregate rows arrive.
+- Web confirmation and deletion.
+
+Manual, CSV, JSON, pasted stats, and screenshot/OCR paths are deferred and
+should not appear in the current web UI.
 
 The MVP should not ask employees for provider admin keys or organization credentials.
 
@@ -203,7 +197,7 @@ Every submitted row must include:
 
 - Source.
 - Confidence.
-- Evidence metadata when not manual.
+- Evidence metadata.
 - Preview confirmation.
 
 The server should reject raw prompts, responses, source code, API keys, raw logs, environment variables, and full local paths.
@@ -273,7 +267,6 @@ type ReportWarning = {
 - Show a preview before upload.
 - Say "actual cost" only when the provider returns billed cost.
 - Say "estimated cost" when calculating from token prices.
-- Label manual entries clearly.
 - Avoid implying token spend equals productivity.
 - Avoid performance-review scare language.
 - Make deletion visible.

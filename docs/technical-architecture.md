@@ -76,10 +76,7 @@ Recommended structure:
 │   │   ├── report_validation.py
 │   │   └── evidence.py
 │   └── adapters
-│       ├── codex_local.py
-│       ├── opencode_stats.py
-│       ├── csv_import.py
-│       └── manual.py
+│       └── codex_local.py
 ├── cli
 │   └── main.py
 ├── mcp_server
@@ -98,12 +95,9 @@ The web app serves:
 
 - Report start page.
 - Report session page.
-- Tool/source picker.
-- Manual entry form.
-- CSV/JSON paste/upload.
-- Pasted stats form.
-- Preview page.
-- Confirmation page.
+- Collector command panel.
+- Live preview panel.
+- Confirmation action.
 - Delete report page.
 - Silver admin review pages.
 - Reporter private status/management page.
@@ -119,11 +113,9 @@ contract.
 
 HTMX should be used for:
 
-- Adding/removing report rows.
-- CSV/JSON preview refresh.
-- Tool-specific import instructions.
-- Preview validation.
-- Submit confirmation.
+- Polling the live preview panel after a collector run.
+- Replacing preview HTML when aggregate rows arrive.
+- Submit/delete confirmation surfaces.
 
 ## API
 
@@ -248,7 +240,7 @@ the same CLI entrypoint. The web flow should prefer:
 irm "https://open.silver.dev/reports/sessions/SESSION_ID/collector.ps1" | iex
 ```
 
-Python commands remain development and fallback commands. The collector binaries
+Python commands remain development commands. The collector binaries
 are built per operating system with PyInstaller because PyInstaller packages for
 the host OS rather than cross-compiling.
 
@@ -310,15 +302,14 @@ The first technical slice should include:
 2. FastAPI app health route.
 3. Jinja2 base layout.
 4. Report session creation.
-5. Manual row form.
-6. Preview page.
+5. Collector command panel.
+6. Live preview panel.
 7. Submit page.
 8. PostgreSQL models and migration.
 9. Pydantic schema tests.
 
 Then add:
 
-1. CSV/JSON paste.
-2. MCP preview/submit server.
-3. Codex local telemetry adapter.
-4. CLI wrapper.
+1. MCP preview/submit server.
+2. Codex local telemetry adapter.
+3. CLI wrapper.

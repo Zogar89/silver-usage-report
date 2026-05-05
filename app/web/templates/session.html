@@ -36,82 +36,9 @@
         <ul class="check-list compact">
           <li>La previsualizacion ocurre antes del envio.</li>
           <li>No se envian prompts, respuestas, codigo fuente, logs crudos, variables de entorno ni API keys.</li>
-          <li>Usa JSON, CSV o carga manual solo si no hay telemetria local disponible.</li>
+          <li>La pantalla se actualiza sola cuando el collector envia los datos.</li>
         </ul>
       </section>
-
-      <form class="panel" method="post" action="/reports/sessions/{{ session.id }}/preview">
-        <div class="panel-heading">
-          <p class="eyebrow">Fallback manual</p>
-          <h2>Carga manual</h2>
-        </div>
-
-        <label>
-          Proveedor
-          <select name="provider">
-            <option value="openai">OpenAI</option>
-            <option value="anthropic">Anthropic</option>
-            <option value="gemini">Gemini</option>
-            <option value="xai">xAI</option>
-            <option value="other">Otro</option>
-          </select>
-        </label>
-
-        <label>
-          Herramienta
-          <select name="tool">
-            <option value="codex">Codex</option>
-            <option value="cursor">Cursor</option>
-            <option value="claude_code">Claude Code</option>
-            <option value="other">Otra</option>
-          </select>
-        </label>
-
-        <div class="field-grid">
-          <label>
-            Inicio del periodo
-            <input name="period_start" type="datetime-local" value="2026-05-01T00:00">
-          </label>
-          <label>
-            Fin del periodo
-            <input name="period_end" type="datetime-local" value="2026-05-02T00:00">
-          </label>
-          <label>
-            Tokens de entrada
-            <input name="input_tokens" type="number" min="0" inputmode="numeric">
-          </label>
-          <label>
-            Tokens de salida
-            <input name="output_tokens" type="number" min="0" inputmode="numeric">
-          </label>
-        </div>
-
-        <button type="submit">Previsualizar reporte</button>
-      </form>
-
-      <form class="panel" method="post" action="/reports/sessions/{{ session.id }}/preview-csv">
-        <div class="panel-heading">
-          <p class="eyebrow">Fallback estructurado</p>
-          <h2>Importar CSV</h2>
-        </div>
-        <label>
-          Filas CSV
-          <textarea name="csv_text" rows="7" placeholder="provider,tool,source,period_start,period_end,period_width,input_tokens,output_tokens,cost_source,confidence"></textarea>
-        </label>
-        <button type="submit">Previsualizar CSV</button>
-      </form>
-
-      <form class="panel" method="post" action="/reports/sessions/{{ session.id }}/preview-json">
-        <div class="panel-heading">
-          <p class="eyebrow">Fallback estructurado</p>
-          <h2>Importar JSON</h2>
-        </div>
-        <label>
-          Payload JSON
-          <textarea name="json_text" rows="7" placeholder='{"rows":[{"provider":"openai","source":"json",...}]}'></textarea>
-        </label>
-        <button type="submit">Previsualizar JSON</button>
-      </form>
     </div>
 
     {% include "_session_preview_panel.html" %}
