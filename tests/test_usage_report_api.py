@@ -1,13 +1,16 @@
 import time
+from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.db.models import ReportSessionModel
+from app.db.session import SessionLocal
 from tests.conftest import signed_post
 
 
-def _codex_row() -> dict[str, object]:
-    return {
+def _codex_row(**overrides) -> dict[str, object]:
+    row = {
         "provider": "openai",
         "tool": "codex",
         "source": "codex_local_telemetry",
@@ -21,6 +24,8 @@ def _codex_row() -> dict[str, object]:
         "cost_source": "unknown",
         "confidence": "medium",
     }
+    row.update(overrides)
+    return row
 
 
 def _create_session(client: TestClient) -> dict[str, object]:
@@ -208,7 +213,7 @@ def test_mutating_report_session_api_requires_valid_payload_signature():
     missing_signature = client.post(
         f"/api/usage-report/sessions/{session['id']}/preview",
         params={"token": session["private_token"]},
-        json={"rows": [_codex_row()]},
+        json={"rows": "not parsed before signature"},
     )
     bad_signature = client.post(
         f"/api/usage-report/sessions/{session['id']}/preview",
@@ -224,6 +229,102 @@ def test_mutating_report_session_api_requires_valid_payload_signature():
     assert missing_signature.json()["detail"] == "signed payload required"
     assert bad_signature.status_code == 401
     assert bad_signature.json()["detail"] == "invalid payload signature"
+
+
+def test_expired_report_session_token_is_rejected():
+    client = TestClient(app)
+    session = _create_session(client)
+    with SessionLocal() as db:
+        session_model = db.get(ReportSessionModel, session["id"])
+        session_model.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        db.commit()
+
+    response = client.get(
+        f"/api/usage-report/sessions/{session['id']}",
+        params={"token": session["private_token"]},
+    )
+
+    assert response.status_code == 401
+
+
+def test_preview_cannot_reopen_submitted_or_deleted_report():
+    client = TestClient(app)
+    session = _create_session(client)
+    signed_post(
+        client,
+        f"/api/usage-report/sessions/{session['id']}/submit",
+        session["private_token"],
+        {
+            "report_session_id": session["id"],
+            "generated_at": "2026-05-04T00:00:00Z",
+            "rows": [_codex_row()],
+            "warnings": [],
+            "user_confirmation": {
+                "preview_shown": True,
+                "confirmed_at": "2026-05-04T00:01:00Z",
+            },
+        },
+    )
+
+    after_submit = signed_post(
+        client,
+        f"/api/usage-report/sessions/{session['id']}/preview",
+        session["private_token"],
+        {"rows": [_codex_row(total_tokens=42, input_tokens=42, output_tokens=0)], "warnings": []},
+    )
+    deleted = client.delete(f"/api/usage-report/sessions/{session['id']}", params={"token": session["private_token"]})
+    after_delete = signed_post(
+        client,
+        f"/api/usage-report/sessions/{session['id']}/preview",
+        session["private_token"],
+        {"rows": [_codex_row(total_tokens=77, input_tokens=77, output_tokens=0)], "warnings": []},
+    )
+
+    assert after_submit.status_code == 409
+    assert deleted.status_code == 200
+    assert after_delete.status_code == 409
+
+
+def test_client_supplied_cost_is_recalculated_server_side():
+    client = TestClient(app)
+    session = _create_session(client)
+    forged_row = _codex_row(cost_usd=999999.0, cost_source="provider_actual")
+
+    response = signed_post(
+        client,
+        f"/api/usage-report/sessions/{session['id']}/submit",
+        session["private_token"],
+        {
+            "report_session_id": session["id"],
+            "generated_at": "2026-05-04T00:00:00Z",
+            "rows": [forged_row],
+            "warnings": [],
+            "user_confirmation": {
+                "preview_shown": True,
+                "confirmed_at": "2026-05-04T00:01:00Z",
+            },
+        },
+    )
+
+    data = response.json()
+    assert response.status_code == 200
+    assert data["total_cost_usd"] == 0.002
+    assert data["rows"][0]["cost_usd"] == 0.002
+    assert data["rows"][0]["cost_source"] == "estimated"
+
+
+def test_collector_diagnostics_reject_sensitive_values():
+    client = TestClient(app)
+    session = _create_session(client)
+
+    response = signed_post(
+        client,
+        f"/api/usage-report/sessions/{session['id']}/collector-diagnostics",
+        session["private_token"],
+        {"stage": "x", "message": "api_key sk-test-secret", "context": {"days": 90}},
+    )
+
+    assert response.status_code == 422
 
 
 def test_preview_report_rows_updates_session_status_and_totals():

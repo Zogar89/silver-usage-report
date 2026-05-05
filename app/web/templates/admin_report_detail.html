@@ -272,7 +272,11 @@
           <canvas id="usage-series-chart" aria-label="Serie temporal de tokens por dia clasificada por tipo" role="img"></canvas>
         </div>
       </div>
-      <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+      <script
+        src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"
+        integrity="sha384-b0GXujLkk9eYYSmcSfoyZbfyElGAQnDyY0skCHSG6w3JgTMFnz11ggrTAr7seu9f"
+        crossorigin="anonymous"
+      ></script>
       <script>
         (() => {
           const chartData = {{ usage_metrics.chartjs | tojson }};

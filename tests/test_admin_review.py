@@ -282,6 +282,7 @@ def test_admin_detail_shows_ai_usage_metrics_for_candidate_report():
     assert "Serie temporal de tokens por dia" in response.text
     assert "Input nuevo" in response.text
     assert "cdn.jsdelivr.net/npm/chart.js" in response.text
+    assert "integrity=\"sha384-b0GXujLkk9eYYSmcSfoyZbfyElGAQnDyY0skCHSG6w3JgTMFnz11ggrTAr7seu9f\"" in response.text
     assert "stacked: true" in response.text
     assert '"fresh_input"' in response.text
 
@@ -327,7 +328,7 @@ def test_admin_detail_shows_warnings_and_row_collection_fields():
     assert "codex_local_telemetry" in detail.text
     assert "codex_local" in detail.text
     assert "estimated" in detail.text
-    assert "0.37" in detail.text
+    assert "0.37" not in detail.text
     assert "0.1.0" in detail.text
 
 

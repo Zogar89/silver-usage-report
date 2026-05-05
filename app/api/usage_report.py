@@ -4,7 +4,7 @@ import hmac
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -13,6 +13,7 @@ from app.services.report_sessions import (
     CollectorDiagnostic,
     ReportSession,
     ReportSessionLimitError,
+    ReportSessionStateError,
     ReportSessionSummary,
     create_report_session,
     delete_report_session_data,
@@ -26,20 +27,30 @@ from app.services.report_sessions import (
 
 router = APIRouter(prefix="/api/usage-report", tags=["usage-report"])
 SIGNATURE_WINDOW_SECONDS = 300
+MAX_SIGNED_BODY_BYTES = 1_000_000
+MAX_REPORT_ROWS = 500
+MAX_REPORT_WARNINGS = 100
 
 
 class CreateReportSessionRequest(BaseModel):
-    reporter_label: str | None = None
-    reporter_email: str | None = None
-    github_handle: str | None = None
-    x_handle: str | None = None
-    candidate_ref: str | None = None
-    campaign_ref: str | None = None
+    reporter_label: str | None = Field(default=None, max_length=255)
+    reporter_email: str | None = Field(default=None, max_length=255)
+    github_handle: str | None = Field(default=None, max_length=120)
+    x_handle: str | None = Field(default=None, max_length=120)
+    candidate_ref: str | None = Field(default=None, max_length=120)
+    campaign_ref: str | None = Field(default=None, max_length=120)
 
 
 class PreviewReportRequest(BaseModel):
-    rows: list[UsageReportRow] = Field(min_length=1)
-    warnings: list[ReportWarning] = Field(default_factory=list)
+    rows: list[UsageReportRow] = Field(min_length=1, max_length=MAX_REPORT_ROWS)
+    warnings: list[ReportWarning] = Field(default_factory=list, max_length=MAX_REPORT_WARNINGS)
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_sensitive_input(cls, data):
+        if isinstance(data, dict):
+            reject_sensitive_fields(data)
+        return data
 
 
 class CollectorDiagnosticRequest(BaseModel):
@@ -53,6 +64,13 @@ class CollectorDiagnosticRequest(BaseModel):
     sessions_dir_status: str | None = Field(default=None, max_length=80)
     rollout_file_count: int | None = Field(default=None, ge=0)
     context: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_sensitive_input(cls, data):
+        if isinstance(data, dict):
+            reject_sensitive_fields(data)
+        return data
 
     @field_validator("context")
     @classmethod
@@ -123,42 +141,46 @@ def get_private_usage_report_status(
 async def preview_usage_report_session(
     session_id: str,
     request: Request,
-    payload: PreviewReportRequest,
     token: str | None = None,
     db: Session = Depends(get_db),
 ) -> ReportSessionSummary:
     session = _get_managed_session_or_401(db, session_id, token)
-    await _require_signed_body(request, token)
-    return preview_report_session(db, session, rows=payload.rows, warnings=payload.warnings)
+    body = await _require_signed_body(request, token)
+    payload = _parse_signed_payload(PreviewReportRequest, body)
+    try:
+        return preview_report_session(db, session, rows=payload.rows, warnings=payload.warnings)
+    except ReportSessionStateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/sessions/{session_id}/submit", response_model=ReportSessionSummary)
 async def submit_usage_report_session(
     session_id: str,
     request: Request,
-    payload: UsageReportPayload,
     token: str | None = None,
     db: Session = Depends(get_db),
 ) -> ReportSessionSummary:
     session = _get_managed_session_or_401(db, session_id, token)
-    await _require_signed_body(request, token)
+    body = await _require_signed_body(request, token)
+    payload = _parse_signed_payload(UsageReportPayload, body)
     if payload.report_session_id != session.id:
         raise HTTPException(status_code=400, detail="report_session_id does not match session")
-    if session.status not in {"draft", "previewed"}:
-        raise HTTPException(status_code=409, detail="report session cannot be submitted")
-    return submit_report_session(db, session, payload)
+    try:
+        return submit_report_session(db, session, payload)
+    except ReportSessionStateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/sessions/{session_id}/collector-diagnostics", response_model=CollectorDiagnosticResponse)
 async def create_collector_diagnostic(
     session_id: str,
     request: Request,
-    payload: CollectorDiagnosticRequest,
     token: str | None = None,
     db: Session = Depends(get_db),
 ) -> CollectorDiagnosticResponse:
     session = _get_managed_session_or_401(db, session_id, token)
-    await _require_signed_body(request, token)
+    body = await _require_signed_body(request, token)
+    payload = _parse_signed_payload(CollectorDiagnosticRequest, body)
     diagnostic = record_collector_diagnostic(
         db,
         session,
@@ -193,7 +215,7 @@ def _get_managed_session_or_401(db: Session, session_id: str, token: str | None)
     return session
 
 
-async def _require_signed_body(request: Request, private_token: str | None) -> None:
+async def _require_signed_body(request: Request, private_token: str | None) -> bytes:
     if not private_token:
         raise HTTPException(status_code=401, detail="management token required")
     timestamp = request.headers.get("x-silver-timestamp")
@@ -207,10 +229,27 @@ async def _require_signed_body(request: Request, private_token: str | None) -> N
     now = int(datetime.now(UTC).timestamp())
     if abs(now - timestamp_value) > SIGNATURE_WINDOW_SECONDS:
         raise HTTPException(status_code=401, detail="payload signature expired")
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > MAX_SIGNED_BODY_BYTES:
+                raise HTTPException(status_code=413, detail="payload too large")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="invalid content length") from None
     body = await request.body()
+    if len(body) > MAX_SIGNED_BODY_BYTES:
+        raise HTTPException(status_code=413, detail="payload too large")
     expected = _body_signature(private_token, timestamp, body)
     if not hmac.compare_digest(signature, expected):
         raise HTTPException(status_code=401, detail="invalid payload signature")
+    return body
+
+
+def _parse_signed_payload(model_type, body: bytes):
+    try:
+        return model_type.model_validate_json(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors(include_url=False, include_context=False)) from exc
 
 
 def _body_signature(private_token: str, timestamp: str, body: bytes) -> str:

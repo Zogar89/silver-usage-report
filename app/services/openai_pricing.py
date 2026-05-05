@@ -56,13 +56,21 @@ def load_openai_price_table(path: Path = PRICE_TABLE_PATH) -> OpenAIPriceTable:
 
 def estimate_openai_cost(row: UsageReportRow) -> UsageReportRow:
     if row.provider != Provider.OPENAI:
-        return row
-    if row.cost_usd is not None:
-        return row
+        return row.model_copy(
+            update={
+                "cost_usd": None,
+                "cost_source": CostSource.UNKNOWN,
+            }
+        )
 
     price = load_openai_price_table().price_for(row.model)
     if price is None:
-        return row
+        return row.model_copy(
+            update={
+                "cost_usd": None,
+                "cost_source": CostSource.UNKNOWN,
+            }
+        )
 
     fresh_input_tokens, billable_cached_tokens = _billable_input_tokens(row)
     cached_input_rate = price.cached_input if price.cached_input is not None else price.input

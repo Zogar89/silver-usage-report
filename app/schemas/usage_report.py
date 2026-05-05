@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import StrEnum
+import re
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -48,16 +49,16 @@ class Confidence(StrEnum):
 class EvidenceMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    adapter: str | None = None
-    adapter_version: str | None = None
+    adapter: str | None = Field(default=None, max_length=80)
+    adapter_version: str | None = Field(default=None, max_length=80)
     row_count: int | None = Field(default=None, ge=0)
-    dedupe_key: str | None = None
-    query_fingerprint: str | None = None
+    dedupe_key: str | None = Field(default=None, max_length=120)
+    query_fingerprint: str | None = Field(default=None, max_length=120)
     model_context_window: int | None = Field(default=None, ge=0)
-    plan_type: str | None = None
+    plan_type: str | None = Field(default=None, max_length=120)
     rate_limit_primary_used_percent: float | None = Field(default=None, ge=0)
     rate_limit_secondary_used_percent: float | None = Field(default=None, ge=0)
-    warnings: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list, max_length=50)
 
 
 class UsageReportRow(BaseModel):
@@ -69,7 +70,7 @@ class UsageReportRow(BaseModel):
     period_start: datetime
     period_end: datetime
     period_width: PeriodWidth
-    model: str | None = None
+    model: str | None = Field(default=None, max_length=120)
     request_count: int | None = Field(default=None, ge=0)
     input_tokens: int | None = Field(default=None, ge=0)
     output_tokens: int | None = Field(default=None, ge=0)
@@ -112,8 +113,8 @@ class ReportWarning(BaseModel):
 
     provider: Provider | None = None
     tool: Tool | None = None
-    code: str
-    message: str
+    code: str = Field(max_length=120)
+    message: str = Field(max_length=1000)
 
 
 class UserConfirmation(BaseModel):
@@ -129,8 +130,8 @@ class UsageReportPayload(BaseModel):
     report_session_id: str
     generated_at: datetime
     schema_version: Literal["2026-05-04"] = "2026-05-04"
-    rows: list[UsageReportRow]
-    warnings: list[ReportWarning] = Field(default_factory=list)
+    rows: list[UsageReportRow] = Field(min_length=1, max_length=500)
+    warnings: list[ReportWarning] = Field(default_factory=list, max_length=100)
     user_confirmation: UserConfirmation
 
     @model_validator(mode="before")
@@ -162,6 +163,27 @@ SENSITIVE_FIELD_NAMES = {
     "raw_log",
 }
 
+SENSITIVE_FIELD_ALIASES = {
+    "apikey",
+    "apiKey".lower(),
+    "api_key",
+    "prompttext",
+    "prompt_text",
+    "responsetext",
+    "response_text",
+    "rawlog",
+    "raw_log",
+    "sourcecode",
+    "source_code",
+}
+
+SENSITIVE_VALUE_PATTERNS = (
+    re.compile(r"\bapi[_-]?key\b", re.IGNORECASE),
+    re.compile(r"\bsk-[A-Za-z0-9_-]{6,}\b"),
+    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    re.compile(r"\b(raw[_ -]?log|source[_ -]?code|conversation[_ -]?history)\b", re.IGNORECASE),
+)
+
 
 def reject_sensitive_fields(data: dict[str, Any]) -> None:
     found = _find_sensitive_fields(data)
@@ -175,10 +197,16 @@ def _find_sensitive_fields(value: Any) -> set[str]:
     if isinstance(value, dict):
         for key, nested in value.items():
             normalized = str(key).lower()
-            if normalized in SENSITIVE_FIELD_NAMES:
+            compact = re.sub(r"[^a-z0-9]", "", normalized)
+            if normalized in SENSITIVE_FIELD_NAMES or normalized in SENSITIVE_FIELD_ALIASES or compact in SENSITIVE_FIELD_ALIASES:
                 found.add(normalized)
             found.update(_find_sensitive_fields(nested))
     elif isinstance(value, list):
         for item in value:
             found.update(_find_sensitive_fields(item))
+    elif isinstance(value, str):
+        for pattern in SENSITIVE_VALUE_PATTERNS:
+            if pattern.search(value):
+                found.add("sensitive_value")
+                break
     return found

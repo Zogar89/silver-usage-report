@@ -56,6 +56,20 @@ def test_report_session_page_shows_collector_script_without_web_preview():
     assert 'hx-swap="none"' in html
     assert "silverUsageReports" in html
     assert "Guardamos este acceso en este navegador" in html
+
+
+def test_pages_send_security_headers_and_script_integrity():
+    client = TestClient(app)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Content-Security-Policy" in response.headers
+    assert "Referrer-Policy" in response.headers
+    assert "integrity=\"sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+\"" in response.text
+    assert "crossorigin=\"anonymous\"" in response.text
+
+
 def test_report_session_page_prioritizes_local_agent_cli_import():
     client = TestClient(app)
 

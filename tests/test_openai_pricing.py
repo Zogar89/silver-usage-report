@@ -49,3 +49,10 @@ def test_estimate_openai_cost_leaves_unknown_models_unpriced():
 
     assert priced.cost_usd is None
     assert priced.cost_source == "unknown"
+
+
+def test_estimate_openai_cost_ignores_client_supplied_cost():
+    priced = estimate_openai_cost(_row(cost_usd=999999.0, cost_source="provider_actual", total_tokens=1_100_000))
+
+    assert priced.cost_usd == 7.1
+    assert priced.cost_source == "estimated"

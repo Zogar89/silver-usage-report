@@ -17,6 +17,15 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     application = FastAPI(title="Silver Usage Report", lifespan=lifespan)
+
+    @application.middleware("http")
+    async def add_security_headers(request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Content-Security-Policy", _content_security_policy())
+        return response
+
     application.mount("/static", StaticFiles(directory="app/web/static"), name="static")
     application.include_router(usage_report_api_router)
     application.include_router(web_router)
@@ -32,3 +41,16 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+
+def _content_security_policy() -> str:
+    return (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "frame-ancestors 'none'"
+    )

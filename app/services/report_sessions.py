@@ -25,6 +25,10 @@ class ReportSessionLimitError(ValueError):
     pass
 
 
+class ReportSessionStateError(ValueError):
+    pass
+
+
 class CollectorDiagnostic(BaseModel):
     id: int | None = None
     report_session_id: str
@@ -160,6 +164,8 @@ def get_report_session_for_management(db: Session, session_id: str, private_toke
         return None
     if session_model.private_token_hash != _hash_token(private_token):
         return None
+    if _as_utc(session_model.expires_at) < datetime.now(UTC):
+        return None
     return _to_report_session(session_model, private_token=private_token)
 
 
@@ -246,6 +252,8 @@ def preview_report_session(
     rows: list[UsageReportRow],
     warnings: list[ReportWarning],
 ) -> ReportSessionSummary:
+    if session.status not in {"draft", "previewed"}:
+        raise ReportSessionStateError("report session cannot be previewed")
     session_model = _require_session_model(db, session.id)
     rows = estimate_report_rows_cost(rows)
     session_model.rows = [_to_row_model(row) for row in rows]
@@ -261,6 +269,8 @@ def submit_report_session(
     session: ReportSession,
     payload: UsageReportPayload,
 ) -> ReportSessionSummary:
+    if session.status not in {"draft", "previewed"}:
+        raise ReportSessionStateError("report session cannot be submitted")
     session_model = _require_session_model(db, session.id)
     rows = estimate_report_rows_cost(payload.rows)
     session_model.rows = [_to_row_model(row) for row in rows]

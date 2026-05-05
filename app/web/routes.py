@@ -15,6 +15,7 @@ from app.services.report_sessions import (
     DEFAULT_REPORTS_PER_PAGE,
     ReportSession,
     ReportSessionLimitError,
+    ReportSessionStateError,
     ReportSessionSummary,
     create_report_session,
     delete_report_session_data,
@@ -104,7 +105,10 @@ def submit_report_session_page(
             "confirmed_at": confirmed_at,
         },
     )
-    submit_report_session(db, session, payload)
+    try:
+        submit_report_session(db, session, payload)
+    except ReportSessionStateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return RedirectResponse(url=_session_report_path(session_id, token, {"sent": "1"}), status_code=303)
 
 
