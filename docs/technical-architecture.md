@@ -256,6 +256,13 @@ docker compose run --rm web pytest
 docker compose run --rm web alembic upgrade head
 ```
 
+The development Compose file publishes only the web app on host port `8002`.
+PostgreSQL is reachable as `db:5432` from the web container but is not published
+to the host by default. This avoids conflicts with local Postgres installs.
+
+Both `web` and `db` define healthchecks. The web healthcheck calls `/health`;
+the database healthcheck uses `pg_isready`.
+
 Environment variables:
 
 ```text

@@ -142,6 +142,9 @@ Run tests:
 python -m pytest
 ```
 
+The repository includes a GitHub Actions workflow at `.github/workflows/ci.yml`
+that runs the test suite and verifies the Docker build.
+
 Run the web app:
 
 ```bash
@@ -153,6 +156,10 @@ Or with Docker:
 ```bash
 docker compose up --build
 ```
+
+Docker Compose exposes the web app on `http://localhost:8002`. PostgreSQL stays
+inside the Compose network to avoid colliding with a local database on port
+`5432`. Both services define healthchecks.
 
 Admin review is available at `/admin/reports`. In development it can be left open,
 but production must configure `ADMIN_TOKEN`; requests then need the `x-admin-token`
