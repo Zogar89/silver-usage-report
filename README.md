@@ -198,10 +198,10 @@ Preview a local CSV report file:
 python -m cli.main preview-csv report.csv
 ```
 
-Preview Codex local telemetry from an explicit SQLite path:
+Preview Codex local usage from session JSONL files:
 
-```bash
-python -m cli.main preview-codex --logs-db "C:\Users\YOU\.codex\logs_2.sqlite"
+```powershell
+python -m cli.main preview-codex --sessions-dir "$env:USERPROFILE\.codex\sessions"
 ```
 
 Submit a local JSON report after explicit confirmation:
@@ -212,8 +212,8 @@ python -m cli.main submit --session SESSION_ID --file report.json --base-url htt
 
 Submit Codex local telemetry after an interactive preview and confirmation:
 
-```bash
-python -m cli.main submit-codex --session SESSION_ID --logs-db "C:\Users\YOU\.codex\logs_2.sqlite" --base-url http://localhost:8002
+```powershell
+python -m cli.main submit-codex --session SESSION_ID --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url http://localhost:8002
 ```
 
 Agent-assisted imports should use the prompt template at `mcp_server/prompts/agent-assisted-import.md`.
@@ -221,6 +221,10 @@ Agent-assisted imports should use the prompt template at `mcp_server/prompts/age
 The web session page presents the local Codex collector command as the primary
 path. Manual rows plus CSV and JSON paste previews remain fallback paths when
 local telemetry is unavailable.
+
+Codex SQLite sources such as `state_5.sqlite` and `logs_2.sqlite` are treated as
+legacy best-effort fallbacks because their local schema is not documented as a
+stable public contract.
 
 ## Candidate CLI Flow
 

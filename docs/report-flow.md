@@ -80,8 +80,8 @@ The agent inspects local usage metadata, builds normalized rows, and sends them 
 
 Best when the user is comfortable running a command.
 
-```bash
-python -m cli.main submit-codex --session SESSION_ID --logs-db "C:\Users\YOU\.codex\logs_2.sqlite" --base-url https://open.silver.dev
+```powershell
+python -m cli.main submit-codex --session SESSION_ID --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url https://open.silver.dev
 ```
 
 The CLI should run once, show a preview, ask for confirmation, submit aggregate rows, and exit. It must not install an ongoing tracker or daemon.

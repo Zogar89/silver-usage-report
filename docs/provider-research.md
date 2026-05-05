@@ -164,8 +164,8 @@ Initial support posture:
 
 | Client / tool | Should support? | Likely source | Current confidence |
 | --- | --- | --- | --- |
-| Codex Desktop | Yes | Local Codex telemetry SQLite | Medium after one-machine validation |
-| Codex VS Code / Codex Desktop with VS Code source | Yes, if it shares `.codex` telemetry | Local Codex telemetry SQLite | Medium after one-machine validation |
+| Codex Desktop | Yes | Local Codex session JSONL, SQLite fallback | Medium after public-tool research plus fixtures |
+| Codex VS Code / Codex Desktop with VS Code source | Yes, if it shares `.codex` session storage | Local Codex session JSONL, SQLite fallback | Medium after public-tool research plus fixtures |
 | Claude Code | Yes | Local stats/logs or provider/account data | Unknown until storage is inspected |
 | Cursor | Yes | Export, local telemetry, or manual | Unknown |
 
@@ -184,14 +184,37 @@ Early user signal: a separate Codex session was reportedly able to inspect the l
 
 This suggests Codex may be a strong first target for agent-assisted local introspection.
 
-Validated local finding from one machine:
+Current implementation direction:
 
-- Codex Desktop stores local logs in `C:\Users\Gabriel\.codex\logs_2.sqlite`.
-- Rows from `codex_core::session::turn` can contain `post sampling token usage`.
-- These rows include `turn_id`, `model`, `total_usage_tokens`, and `estimated_token_count`.
-- Deduplicating by `turn_id` produced a May 2026 local usage report by day and model.
-- The source measured Codex Desktop local usage, not total OpenAI account usage.
-- The referenced session metadata included `originator: Codex Desktop` and `source: vscode`, which suggests the same `.codex` telemetry may cover the VS Code-hosted Codex experience. This still needs validation across installations.
+- Prefer Codex session JSONL rollouts under `~/.codex/sessions` for local
+  usage extraction.
+- Existing public Codex usage tools commonly read session files rather than
+  treating SQLite logs as a stable public contract.
+- SQLite sources such as `state_5.sqlite` and `logs_2.sqlite` are useful
+  fallback/research artifacts, but should be treated as undocumented internal
+  state.
+
+Public references found during implementation:
+
+- `ryoppippi/ccusage` documents `@ccusage/codex` for OpenAI Codex usage
+  analysis from local JSONL files.
+- Tokage describes itself as a local-only Codex token tracker that scans
+  `~/.codex/sessions`.
+- Codex Token Usage, a VS Code extension, says it reads Codex session JSONL log
+  files and extracts token usage records written at the end of sessions.
+- `xiangz19/codex-ratelimit` parses `~/.codex/sessions` rollout JSONL files for
+  token usage and rate-limit records.
+- OpenAI's public Codex GitHub discussions point users at rollout JSONL under
+  `~/.codex/sessions` for inspecting local session context.
+
+Validated local SQLite finding from one machine:
+
+- Codex Desktop stores local SQLite state in `.codex`.
+- `logs_2.sqlite` rows from `codex_core::session::turn` can contain
+  `post sampling token usage`.
+- `state_5.sqlite` can contain thread-level `tokens_used` rollups.
+- The source measures Codex local usage on one machine, not total OpenAI account
+  usage.
 
 Open validation questions:
 

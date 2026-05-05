@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Any, Sequence
 from urllib import request
 
-from app.adapters.codex_local import preview_codex_local_usage
+from app.adapters.codex_local import preview_codex_local_usage, preview_codex_sessions_usage
 from app.services.imports import parse_csv_rows, parse_json_rows
 
 
@@ -21,9 +21,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     preview_codex = subcommands.add_parser(
         "preview-codex",
-        help="Preview Codex local telemetry from an explicit logs_2.sqlite path.",
+        help="Preview Codex local usage from a sessions directory or legacy SQLite path.",
     )
-    preview_codex.add_argument("--logs-db", required=True, type=Path)
+    preview_codex.add_argument("--sessions-dir", type=Path)
+    preview_codex.add_argument("--state-db", type=Path)
+    preview_codex.add_argument("--logs-db", type=Path)
 
     submit = subcommands.add_parser("submit", help="Preview and submit a JSON report to a session.")
     submit.add_argument("--session", required=True)
@@ -33,10 +35,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     submit_codex = subcommands.add_parser(
         "submit-codex",
-        help="Preview and submit Codex local telemetry from an explicit logs_2.sqlite path.",
+        help="Preview and submit Codex local usage from a sessions directory or legacy SQLite path.",
     )
     submit_codex.add_argument("--session", required=True)
-    submit_codex.add_argument("--logs-db", required=True, type=Path)
+    submit_codex.add_argument("--sessions-dir", type=Path)
+    submit_codex.add_argument("--state-db", type=Path)
+    submit_codex.add_argument("--logs-db", type=Path)
     submit_codex.add_argument("--base-url", default="http://localhost:8000")
     submit_codex.add_argument("--yes", action="store_true")
 
@@ -46,11 +50,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "preview-csv":
         return _preview_csv(args.file)
     if args.command == "preview-codex":
-        return _preview_codex(args.logs_db)
+        return _preview_codex(args.sessions_dir, args.state_db, args.logs_db)
     if args.command == "submit":
         return _submit(args.session, args.file, args.base_url, args.yes)
     if args.command == "submit-codex":
-        return _submit_codex(args.session, args.logs_db, args.base_url, args.yes)
+        return _submit_codex(args.session, args.sessions_dir, args.state_db, args.logs_db, args.base_url, args.yes)
     return 1
 
 
@@ -67,8 +71,8 @@ def _preview_csv(path: Path) -> int:
     return 0
 
 
-def _preview_codex(logs_db_path: Path) -> int:
-    rows, warnings = preview_codex_local_usage(logs_db_path)
+def _preview_codex(sessions_dir: Path | None, state_db_path: Path | None, logs_db_path: Path | None) -> int:
+    rows, warnings = _preview_codex_source(sessions_dir, state_db_path, logs_db_path)
     _print_preview(rows)
     print("Source: codex_local_telemetry")
     for warning in warnings:
@@ -82,9 +86,30 @@ def _submit(session_id: str, path: Path, base_url: str, yes: bool) -> int:
     return _submit_rows(session_id, rows, [], base_url, yes, "report")
 
 
-def _submit_codex(session_id: str, logs_db_path: Path, base_url: str, yes: bool) -> int:
-    rows, warnings = preview_codex_local_usage(logs_db_path)
+def _submit_codex(
+    session_id: str,
+    sessions_dir: Path | None,
+    state_db_path: Path | None,
+    logs_db_path: Path | None,
+    base_url: str,
+    yes: bool,
+) -> int:
+    rows, warnings = _preview_codex_source(sessions_dir, state_db_path, logs_db_path)
     return _submit_rows(session_id, rows, warnings, base_url, yes, "Codex local telemetry")
+
+
+def _preview_codex_source(
+    sessions_dir: Path | None,
+    state_db_path: Path | None,
+    logs_db_path: Path | None,
+):
+    if sessions_dir is not None:
+        return preview_codex_sessions_usage(sessions_dir)
+    if state_db_path is not None:
+        return preview_codex_local_usage(state_db_path)
+    if logs_db_path is not None:
+        return preview_codex_local_usage(logs_db_path)
+    raise SystemExit("submit-codex requires --sessions-dir, --state-db, or --logs-db")
 
 
 def _submit_rows(session_id: str, rows, warnings, base_url: str, yes: bool, label: str) -> int:

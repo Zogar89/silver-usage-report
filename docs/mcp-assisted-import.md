@@ -29,19 +29,25 @@ API keys, environment variables, and full local paths.
 The Codex helper is intentionally explicit-path only. It must not scan the user's
 home directory or auto-discover `.codex` files without the user's consent.
 
+The primary Codex source is now the local session JSONL directory
+`~/.codex/sessions`, because existing Codex usage tools commonly parse session
+rollouts rather than treating `logs_2.sqlite` as a stable public contract.
+SQLite files remain best-effort fallbacks only.
+
 CLI preview:
 
-```bash
-python -m cli.main preview-codex --logs-db "C:\Users\YOU\.codex\logs_2.sqlite"
+```powershell
+python -m cli.main preview-codex --sessions-dir "$env:USERPROFILE\.codex\sessions"
 ```
 
 CLI submit:
 
-```bash
-python -m cli.main submit-codex --session SESSION_ID --logs-db "C:\Users\YOU\.codex\logs_2.sqlite" --base-url http://localhost:8002 --yes
+```powershell
+python -m cli.main submit-codex --session SESSION_ID --sessions-dir "$env:USERPROFILE\.codex\sessions" --base-url http://localhost:8002
 ```
 
-The adapter currently queries only rows that match:
+The legacy SQLite adapter can query `state_5.sqlite` thread rollups, or
+`logs_2.sqlite` rows that match:
 
 - `target = "codex_core::session::turn"`
 - `feedback_log_body` containing `post sampling token usage`

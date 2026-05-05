@@ -1,3 +1,5 @@
+from html import unescape
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -32,11 +34,14 @@ def test_report_session_page_prioritizes_local_agent_cli_import():
 
     assert response.status_code == 200
     html = response.text
+    rendered_text = unescape(html)
     session_id = _session_id_from(html)
     assert "Importacion con agente local" in html
     assert "python -m cli.main submit-codex" in html
     assert f"--session {session_id}" in html
+    assert '--sessions-dir "$env:USERPROFILE\\.codex\\sessions"' in rendered_text
     assert "--base-url http://testserver" in html
+    assert "YOU" not in html
     assert html.index("Importacion con agente local") < html.index("Carga manual")
 
 

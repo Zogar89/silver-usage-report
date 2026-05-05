@@ -162,7 +162,7 @@ def _render_session(
     codex_cli_command = (
         "python -m cli.main submit-codex "
         f"--session {session.id} "
-        '--logs-db "C:\\Users\\YOU\\.codex\\logs_2.sqlite" '
+        '--sessions-dir "$env:USERPROFILE\\.codex\\sessions" '
         f"--base-url {base_url}"
     )
     return templates.TemplateResponse(

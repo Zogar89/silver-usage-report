@@ -12,8 +12,25 @@ USAGE_MARKER = "post sampling token usage"
 INTERNAL_USAGE_MARKERS = {"auto-review", "internal_approval", "approval"}
 
 
+def preview_codex_sessions_usage(sessions_dir: Path) -> tuple[list[UsageReportRow], list[ReportWarning]]:
+    events = _read_session_usage_events(sessions_dir)
+    rows = [_event_to_row(event, row_count=len(events)) for event in events]
+    warnings: list[ReportWarning] = []
+    if not rows:
+        warnings.append(
+            ReportWarning(
+                provider="openai",
+                tool="codex",
+                code="codex_no_usage_rows",
+                message="No se encontraron filas locales de uso de Codex.",
+            )
+        )
+    return rows, warnings
+
+
 def preview_codex_local_usage(logs_db_path: Path) -> tuple[list[UsageReportRow], list[ReportWarning]]:
-    events = _read_usage_events(logs_db_path)
+    state_db_path = _state_db_for(logs_db_path)
+    events = _read_state_events(state_db_path) if state_db_path else _read_usage_events(logs_db_path)
     external_events = [event for event in events if not _is_internal_usage(event)]
     internal_count = len(events) - len(external_events)
     rows = [_event_to_row(event, row_count=len(external_events)) for event in external_events]
@@ -39,11 +56,166 @@ def preview_codex_local_usage(logs_db_path: Path) -> tuple[list[UsageReportRow],
     return rows, warnings
 
 
+def _read_session_usage_events(sessions_dir: Path) -> list[dict[str, Any]]:
+    if not sessions_dir.exists():
+        return []
+
+    events: list[dict[str, Any]] = []
+    for path in sorted(sessions_dir.rglob("rollout-*.jsonl")):
+        latest_event: dict[str, Any] | None = None
+        for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            parsed = _parse_session_line(line)
+            if parsed is not None:
+                latest_event = parsed
+        if latest_event is not None:
+            events.append(latest_event)
+    row_count = len(events)
+    for event in events:
+        event["_row_count"] = row_count
+    return events
+
+
+def _parse_session_line(line: str) -> dict[str, Any] | None:
+    try:
+        parsed = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+
+    usage = parsed.get("usage")
+    if not isinstance(usage, dict):
+        payload = parsed.get("payload")
+        if isinstance(payload, dict) and payload.get("type") == "token_count":
+            info = payload.get("info")
+            if isinstance(info, dict):
+                usage = info.get("total_token_usage")
+    if not isinstance(usage, dict):
+        return None
+    if not _has_token_usage(usage):
+        return None
+
+    return {
+        "_timestamp": _optional_str(parsed.get("timestamp")) or datetime.now(UTC).isoformat(),
+        "_query_fingerprint": "codex_sessions_token_count_total_usage_v1",
+        "message": USAGE_MARKER,
+        "model": _optional_str(parsed.get("model")),
+        "input_tokens": _usage_int(usage, "input_tokens"),
+        "output_tokens": _usage_int(usage, "output_tokens"),
+        "cached_input_tokens": _usage_int(usage, "cached_input_tokens"),
+        "cache_creation_input_tokens": _usage_int(usage, "cache_creation_input_tokens"),
+        "reasoning_tokens": _usage_int(usage, "reasoning_tokens", "reasoning_output_tokens"),
+        "total_tokens": _usage_total(usage),
+    }
+
+
+def _has_token_usage(usage: dict[str, Any]) -> bool:
+    return any(
+        usage.get(key) not in (None, "")
+        for key in (
+            "input_tokens",
+            "output_tokens",
+            "cached_input_tokens",
+            "cache_creation_input_tokens",
+            "reasoning_tokens",
+            "reasoning_output_tokens",
+            "total_tokens",
+        )
+    )
+
+
+def _usage_int(usage: dict[str, Any], key: str, *aliases: str) -> int | None:
+    for candidate in (key, *aliases):
+        value = _optional_int(usage.get(candidate))
+        if value is not None:
+            return value
+    return None
+
+
+def _usage_total(usage: dict[str, Any]) -> int | None:
+    explicit_total = _usage_int(usage, "total_tokens")
+    if explicit_total is not None:
+        return explicit_total
+    values = [
+        _usage_int(usage, "input_tokens"),
+        _usage_int(usage, "output_tokens"),
+        _usage_int(usage, "cached_input_tokens"),
+        _usage_int(usage, "cache_creation_input_tokens"),
+        _usage_int(usage, "reasoning_tokens", "reasoning_output_tokens"),
+    ]
+    total = sum(value or 0 for value in values)
+    return total if total else None
+
+
+def _state_db_for(logs_db_path: Path) -> Path | None:
+    if logs_db_path.name == "state_5.sqlite" and logs_db_path.exists():
+        return logs_db_path
+    sibling = logs_db_path.with_name("state_5.sqlite")
+    if sibling.exists():
+        return sibling
+    return None
+
+
+def _read_state_events(state_db_path: Path) -> list[dict[str, Any]]:
+    connection = sqlite3.connect(state_db_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        rows = connection.execute(
+            """
+            select created_at, updated_at, created_at_ms, updated_at_ms, model, tokens_used
+            from threads
+            where tokens_used is not null
+              and tokens_used > 0
+            order by created_at asc
+            """
+        ).fetchall()
+    finally:
+        connection.close()
+
+    events: list[dict[str, Any]] = []
+    row_count = len(rows)
+    for row in rows:
+        events.append(
+            {
+                "_timestamp": _epoch_row_timestamp(row, "created_at"),
+                "_period_end": _epoch_row_timestamp(row, "updated_at"),
+                "_row_count": row_count,
+                "_query_fingerprint": "codex_state_threads_tokens_used_v1",
+                "message": USAGE_MARKER,
+                "model": _optional_str(row["model"]),
+                "total_tokens": _optional_int(row["tokens_used"]),
+            }
+        )
+    return events
+
+
 def _read_usage_events(logs_db_path: Path) -> list[dict[str, Any]]:
     connection = sqlite3.connect(logs_db_path)
     connection.row_factory = sqlite3.Row
     try:
-        rows = connection.execute(
+        columns = _logs_columns(connection)
+        rows = _query_usage_rows(connection, columns)
+    finally:
+        connection.close()
+
+    events: list[dict[str, Any]] = []
+    for row in rows:
+        parsed = _parse_body(row["feedback_log_body"])
+        if parsed is None:
+            continue
+        parsed["_timestamp"] = _timestamp_from_row(row)
+        events.append(parsed)
+    return events
+
+
+def _logs_columns(connection: sqlite3.Connection) -> set[str]:
+    rows = connection.execute("pragma table_info(logs)").fetchall()
+    return {str(row["name"]) for row in rows}
+
+
+def _query_usage_rows(connection: sqlite3.Connection, columns: set[str]) -> list[sqlite3.Row]:
+    if "timestamp" in columns:
+        return connection.execute(
             """
             select timestamp, feedback_log_body
             from logs
@@ -53,17 +225,38 @@ def _read_usage_events(logs_db_path: Path) -> list[dict[str, Any]]:
             """,
             ("codex_core::session::turn", f"%{USAGE_MARKER}%"),
         ).fetchall()
-    finally:
-        connection.close()
 
-    events: list[dict[str, Any]] = []
-    for row in rows:
-        parsed = _parse_body(row["feedback_log_body"])
-        if parsed is None:
-            continue
-        parsed["_timestamp"] = row["timestamp"]
-        events.append(parsed)
-    return events
+    if "ts" in columns:
+        ts_nanos_select = "ts_nanos" if "ts_nanos" in columns else "0 as ts_nanos"
+        return connection.execute(
+            f"""
+            select ts, {ts_nanos_select}, feedback_log_body
+            from logs
+            where target = ?
+              and feedback_log_body like ?
+            order by ts asc, ts_nanos asc
+            """,
+            ("codex_core::session::turn", f"%{USAGE_MARKER}%"),
+        ).fetchall()
+
+    raise sqlite3.OperationalError("unsupported Codex logs schema: expected timestamp or ts column")
+
+
+def _timestamp_from_row(row: sqlite3.Row) -> str:
+    keys = set(row.keys())
+    if "timestamp" in keys:
+        return str(row["timestamp"])
+    seconds = int(row["ts"])
+    nanos = int(row["ts_nanos"] or 0)
+    return datetime.fromtimestamp(seconds + (nanos / 1_000_000_000), UTC).isoformat()
+
+
+def _epoch_row_timestamp(row: sqlite3.Row, seconds_key: str) -> str:
+    milliseconds_key = f"{seconds_key}_ms"
+    keys = set(row.keys())
+    if milliseconds_key in keys and row[milliseconds_key] not in (None, ""):
+        return datetime.fromtimestamp(int(row[milliseconds_key]) / 1000, UTC).isoformat()
+    return datetime.fromtimestamp(int(row[seconds_key]), UTC).isoformat()
 
 
 def _parse_body(body: str) -> dict[str, Any] | None:
@@ -85,12 +278,13 @@ def _is_internal_usage(event: dict[str, Any]) -> bool:
 
 def _event_to_row(event: dict[str, Any], row_count: int) -> UsageReportRow:
     timestamp = _parse_timestamp(str(event.get("_timestamp")))
+    period_end = _parse_timestamp(str(event.get("_period_end"))) if event.get("_period_end") else timestamp + timedelta(seconds=1)
     return UsageReportRow(
         provider="openai",
         tool="codex",
         source="codex_local_telemetry",
         period_start=timestamp.isoformat(),
-        period_end=(timestamp + timedelta(seconds=1)).isoformat(),
+        period_end=period_end.isoformat(),
         period_width="custom",
         model=_optional_str(event.get("model")),
         request_count=1,
@@ -105,8 +299,9 @@ def _event_to_row(event: dict[str, Any], row_count: int) -> UsageReportRow:
         evidence=EvidenceMetadata(
             adapter=ADAPTER_NAME,
             adapter_version=ADAPTER_VERSION,
-            row_count=row_count,
-            query_fingerprint="codex_core_session_turn_post_sampling_token_usage_v1",
+            row_count=_optional_int(event.get("_row_count")) or row_count,
+            query_fingerprint=_optional_str(event.get("_query_fingerprint"))
+            or "codex_core_session_turn_post_sampling_token_usage_v1",
             warnings=[],
         ),
     )

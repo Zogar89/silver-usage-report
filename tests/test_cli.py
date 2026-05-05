@@ -239,6 +239,47 @@ def test_cli_preview_codex_reads_explicit_logs_db(capsys):
         db_path.unlink(missing_ok=True)
 
 
+def test_cli_preview_codex_reads_sessions_dir(capsys):
+    sessions_dir = Path(".tmp_cli_codex_sessions")
+    rollout_dir = sessions_dir / "2026" / "04" / "25"
+    rollout_dir.mkdir(parents=True, exist_ok=True)
+    rollout_path = rollout_dir / "rollout-2026-04-25T05-21-56-thread.jsonl"
+    try:
+        rollout_path.write_text(
+            json.dumps(
+                {
+                    "timestamp": "2026-04-25T05:21:56Z",
+                    "type": "event_msg",
+                    "payload": {
+                        "type": "token_count",
+                        "info": {
+                            "total_token_usage": {
+                                "input_tokens": 100,
+                                "output_tokens": 50,
+                                "total_tokens": 150,
+                            }
+                        },
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        exit_code = main(["preview-codex", "--sessions-dir", str(sessions_dir)])
+
+        assert exit_code == 0
+        output = capsys.readouterr().out
+        assert "Rows: 1" in output
+        assert "Total tokens: 150" in output
+        assert "Source: codex_local_telemetry" in output
+    finally:
+        rollout_path.unlink(missing_ok=True)
+        rollout_dir.rmdir()
+        (sessions_dir / "2026" / "04").rmdir()
+        (sessions_dir / "2026").rmdir()
+        sessions_dir.rmdir()
+
+
 def test_cli_submit_codex_requires_yes_confirmation(capsys):
     db_path = Path(".tmp_cli_codex_submit_requires.sqlite")
     connection = sqlite3.connect(db_path)
