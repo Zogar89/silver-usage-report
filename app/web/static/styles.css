@@ -186,7 +186,8 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   box-sizing: border-box;
   border: 1px solid #d8d1c4;
@@ -195,6 +196,10 @@ select {
   background: #fbfaf7;
   color: #111111;
   font: inherit;
+}
+
+textarea {
+  resize: vertical;
 }
 
 .field-grid {
@@ -227,6 +232,27 @@ td {
 th {
   color: #5f5a50;
   font-weight: 700;
+}
+
+.table-wrap {
+  display: grid;
+  gap: 10px;
+  overflow-x: auto;
+}
+
+h3 {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 0;
+}
+
+.warning-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: #5f4b19;
+  font-size: 14px;
 }
 
 @media (max-width: 760px) {

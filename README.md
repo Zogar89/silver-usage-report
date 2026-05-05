@@ -154,6 +154,10 @@ Or with Docker:
 docker compose up --build
 ```
 
+Admin review is available at `/admin/reports`. In development it can be left open,
+but production must configure `ADMIN_TOKEN`; requests then need the `x-admin-token`
+header.
+
 Initial API endpoints:
 
 ```text
@@ -196,6 +200,8 @@ python -m cli.main submit-codex --session SESSION_ID --logs-db "C:\Users\YOU\.co
 ```
 
 Agent-assisted imports should use the prompt template at `mcp_server/prompts/agent-assisted-import.md`.
+
+The web session page supports manual rows plus CSV and JSON paste previews.
 
 ## Candidate CLI Flow
 

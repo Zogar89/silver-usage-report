@@ -1,5 +1,20 @@
 # Security And Privacy
 
+## Admin Review Access
+
+The Silver admin review view is intended for internal review only.
+
+In development, `/admin/reports` can run without a token for local iteration.
+In production, `ADMIN_TOKEN` must be configured. Requests to admin routes must
+include:
+
+```text
+x-admin-token: <ADMIN_TOKEN>
+```
+
+If `ENVIRONMENT=production` and `ADMIN_TOKEN` is missing, admin review returns a
+service configuration error instead of exposing reports.
+
 Silver Usage Report only works if users believe the report process is safe.
 
 ## Data Classification

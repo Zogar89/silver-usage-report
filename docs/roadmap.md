@@ -39,7 +39,7 @@ Outcome: every user has at least one path to submit a report.
 
 - Create CSV template.
 - Create JSON schema. In progress: Pydantic report rows and payloads are shared by API, CLI, and MCP helpers.
-- Create manual entry form. In progress: web manual preview, submit, and delete flow added.
+- Create manual entry form. In progress: web manual, CSV, and JSON preview flows added.
 - Validate report payloads. In progress: token/date validation, sensitive-field rejection, and derived totals added.
 - Label manual data as lower confidence. In progress: manual rows are capped to low confidence.
 - Add duplicate period warnings.

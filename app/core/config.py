@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./silver_usage_report.db"
     secret_key: str = "dev-secret-change-me"
     admin_token: str | None = None
+    environment: str = "development"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

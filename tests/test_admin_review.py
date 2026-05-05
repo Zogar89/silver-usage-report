@@ -20,6 +20,24 @@ def test_admin_review_requires_token_when_configured():
         settings.admin_token = original_token
 
 
+def test_admin_review_requires_token_in_production_even_when_unset():
+    settings = get_settings()
+    original_token = settings.admin_token
+    original_environment = settings.environment
+    settings.admin_token = None
+    settings.environment = "production"
+    try:
+        client = TestClient(app)
+
+        response = client.get("/admin/reports")
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == "ADMIN_TOKEN must be configured in production"
+    finally:
+        settings.admin_token = original_token
+        settings.environment = original_environment
+
+
 def test_admin_review_lists_submitted_report_totals():
     client = TestClient(app)
     session = client.post("/api/usage-report/sessions", json={}).json()

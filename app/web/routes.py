@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from urllib.parse import parse_qs
 
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.schemas.usage_report import ReportWarning, UsageReportPayload, UsageReportRow
+from app.services.imports import parse_csv_rows, parse_json_rows
 from app.services.report_sessions import (
     ReportSession,
     ReportSessionSummary,
@@ -59,6 +61,36 @@ async def preview_manual_report_session(
     summary = preview_report_session(db, session, rows=[row], warnings=[warning])
     session = _get_session_or_404(db, session_id)
     return _render_session(request, session, summary=summary, banner="Preview ready")
+
+
+@router.post("/reports/sessions/{session_id}/preview-csv", response_class=HTMLResponse)
+async def preview_csv_report_session(
+    session_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    session = _get_session_or_404(db, session_id)
+    form = _parse_urlencoded_form(await request.body())
+    rows = parse_csv_rows(form.get("csv_text", ""))
+    warning = ReportWarning(code="csv_import", message="Rows were imported from CSV.")
+    summary = preview_report_session(db, session, rows=rows, warnings=[warning])
+    session = _get_session_or_404(db, session_id)
+    return _render_session(request, session, summary=summary, banner="CSV preview ready")
+
+
+@router.post("/reports/sessions/{session_id}/preview-json", response_class=HTMLResponse)
+async def preview_json_report_session(
+    session_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    session = _get_session_or_404(db, session_id)
+    form = _parse_urlencoded_form(await request.body())
+    rows = parse_json_rows(json.loads(form.get("json_text", "{}")))
+    warning = ReportWarning(code="json_import", message="Rows were imported from JSON.")
+    summary = preview_report_session(db, session, rows=rows, warnings=[warning])
+    session = _get_session_or_404(db, session_id)
+    return _render_session(request, session, summary=summary, banner="JSON preview ready")
 
 
 @router.post("/reports/sessions/{session_id}/submit", response_class=HTMLResponse)
@@ -112,7 +144,10 @@ def admin_reports(
 
 
 def _require_admin_token(x_admin_token: str | None) -> None:
-    admin_token = get_settings().admin_token
+    settings = get_settings()
+    if settings.environment == "production" and not settings.admin_token:
+        raise HTTPException(status_code=503, detail="ADMIN_TOKEN must be configured in production")
+    admin_token = settings.admin_token
     if admin_token and x_admin_token != admin_token:
         raise HTTPException(status_code=401, detail="admin token required")
 

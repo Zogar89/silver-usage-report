@@ -18,54 +18,80 @@
   </section>
 
   <section class="two-column">
-    <form class="panel" method="post" action="/reports/sessions/{{ session.id }}/preview">
-      <div class="panel-heading">
-        <p class="eyebrow">Manual fallback</p>
-        <h2>Manual usage row</h2>
-      </div>
+    <div class="stack">
+      <form class="panel" method="post" action="/reports/sessions/{{ session.id }}/preview">
+        <div class="panel-heading">
+          <p class="eyebrow">Manual fallback</p>
+          <h2>Manual usage row</h2>
+        </div>
 
-      <label>
-        Provider
-        <select name="provider">
-          <option value="openai">OpenAI</option>
-          <option value="anthropic">Anthropic</option>
-          <option value="gemini">Gemini</option>
-          <option value="xai">xAI</option>
-          <option value="other">Other</option>
-        </select>
-      </label>
+        <label>
+          Provider
+          <select name="provider">
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="gemini">Gemini</option>
+            <option value="xai">xAI</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
 
-      <label>
-        Tool
-        <select name="tool">
-          <option value="codex">Codex</option>
-          <option value="cursor">Cursor</option>
-          <option value="claude_code">Claude Code</option>
-          <option value="other">Other</option>
-        </select>
-      </label>
+        <label>
+          Tool
+          <select name="tool">
+            <option value="codex">Codex</option>
+            <option value="cursor">Cursor</option>
+            <option value="claude_code">Claude Code</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
 
-      <div class="field-grid">
-        <label>
-          Period start
-          <input name="period_start" type="datetime-local" value="2026-05-01T00:00">
-        </label>
-        <label>
-          Period end
-          <input name="period_end" type="datetime-local" value="2026-05-02T00:00">
-        </label>
-        <label>
-          Input tokens
-          <input name="input_tokens" type="number" min="0" inputmode="numeric">
-        </label>
-        <label>
-          Output tokens
-          <input name="output_tokens" type="number" min="0" inputmode="numeric">
-        </label>
-      </div>
+        <div class="field-grid">
+          <label>
+            Period start
+            <input name="period_start" type="datetime-local" value="2026-05-01T00:00">
+          </label>
+          <label>
+            Period end
+            <input name="period_end" type="datetime-local" value="2026-05-02T00:00">
+          </label>
+          <label>
+            Input tokens
+            <input name="input_tokens" type="number" min="0" inputmode="numeric">
+          </label>
+          <label>
+            Output tokens
+            <input name="output_tokens" type="number" min="0" inputmode="numeric">
+          </label>
+        </div>
 
-      <button type="submit">Preview report</button>
-    </form>
+        <button type="submit">Preview report</button>
+      </form>
+
+      <form class="panel" method="post" action="/reports/sessions/{{ session.id }}/preview-csv">
+        <div class="panel-heading">
+          <p class="eyebrow">Structured fallback</p>
+          <h2>CSV import</h2>
+        </div>
+        <label>
+          CSV rows
+          <textarea name="csv_text" rows="7" placeholder="provider,tool,source,period_start,period_end,period_width,input_tokens,output_tokens,cost_source,confidence"></textarea>
+        </label>
+        <button type="submit">Preview CSV</button>
+      </form>
+
+      <form class="panel" method="post" action="/reports/sessions/{{ session.id }}/preview-json">
+        <div class="panel-heading">
+          <p class="eyebrow">Structured fallback</p>
+          <h2>JSON import</h2>
+        </div>
+        <label>
+          JSON payload
+          <textarea name="json_text" rows="7" placeholder='{"rows":[{"provider":"openai","source":"json",...}]}'></textarea>
+        </label>
+        <button type="submit">Preview JSON</button>
+      </form>
+    </div>
 
     <aside class="panel">
       <div class="panel-heading">
@@ -81,6 +107,38 @@
           <dt>Confidence</dt>
           <dd>{{ summary.rows[0].confidence }}</dd>
         </dl>
+        <div class="table-wrap">
+          <h3>Preview rows</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>Tool</th>
+                <th>Source</th>
+                <th>Tokens</th>
+                <th>Confidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in summary.rows %}
+                <tr>
+                  <td>{{ row.provider }}</td>
+                  <td>{{ row.tool or "other" }}</td>
+                  <td>{{ row.source }}</td>
+                  <td>{{ row.total_tokens or 0 }}</td>
+                  <td>{{ row.confidence }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if summary.warnings %}
+          <ul class="warning-list">
+            {% for warning in summary.warnings %}
+              <li>{{ warning.code }}: {{ warning.message }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
         {% if session.status == "previewed" %}
           <form method="post" action="/reports/sessions/{{ session.id }}/submit">
             <button type="submit">Confirm submission</button>
