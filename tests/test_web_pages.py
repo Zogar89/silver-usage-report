@@ -25,6 +25,21 @@ def test_report_session_page_shows_manual_entry_preview_surface():
     assert "Data shared with Silver" in html
 
 
+def test_report_session_page_prioritizes_local_agent_cli_import():
+    client = TestClient(app)
+
+    response = client.post("/reports/sessions")
+
+    assert response.status_code == 200
+    html = response.text
+    session_id = _session_id_from(html)
+    assert "Local agent import" in html
+    assert "python -m cli.main submit-codex" in html
+    assert f"--session {session_id}" in html
+    assert "--base-url http://testserver" in html
+    assert html.index("Local agent import") < html.index("Manual usage row")
+
+
 def test_manual_web_flow_previews_submits_and_deletes_report():
     client = TestClient(app)
     response = client.post("/reports/sessions")

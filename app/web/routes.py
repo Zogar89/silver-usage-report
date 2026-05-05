@@ -158,6 +158,13 @@ def _render_session(
     summary: ReportSessionSummary | None = None,
     banner: str | None = None,
 ) -> HTMLResponse:
+    base_url = str(request.base_url).rstrip("/")
+    codex_cli_command = (
+        "python -m cli.main submit-codex "
+        f"--session {session.id} "
+        '--logs-db "C:\\Users\\YOU\\.codex\\logs_2.sqlite" '
+        f"--base-url {base_url}"
+    )
     return templates.TemplateResponse(
         request,
         "session.html",
@@ -166,6 +173,7 @@ def _render_session(
             "session": session,
             "summary": summary or summarize_report_session(session),
             "banner": banner,
+            "codex_cli_command": codex_cli_command,
         },
     )
 

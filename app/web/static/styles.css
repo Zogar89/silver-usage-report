@@ -202,6 +202,24 @@ textarea {
   resize: vertical;
 }
 
+.command-panel {
+  border-color: #151515;
+}
+
+.command-box {
+  min-height: 84px;
+  color: #f7f4ed;
+  background: #151515;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.compact {
+  gap: 6px;
+  font-size: 14px;
+}
+
 .field-grid {
   display: grid;
   gap: 12px;

@@ -19,6 +19,23 @@
 
   <section class="two-column">
     <div class="stack">
+      <section class="panel command-panel">
+        <div class="panel-heading">
+          <p class="eyebrow">Primary path</p>
+          <h2>Local agent import</h2>
+        </div>
+        <p>Run this from the project checkout or paste it into a local coding agent. It reads only aggregate Codex usage telemetry from the explicit SQLite path, previews the totals, asks for confirmation, and submits the report to Silver.</p>
+        <label>
+          Codex local collector
+          <textarea class="command-box" rows="3" readonly>{{ codex_cli_command }}</textarea>
+        </label>
+        <ul class="check-list compact">
+          <li>Preview happens before submit.</li>
+          <li>No prompts, responses, source code, raw logs, environment variables, or API keys are sent.</li>
+          <li>Use the JSON, CSV, or manual forms only when local telemetry is unavailable.</li>
+        </ul>
+      </section>
+
       <form class="panel" method="post" action="/reports/sessions/{{ session.id }}/preview">
         <div class="panel-heading">
           <p class="eyebrow">Manual fallback</p>

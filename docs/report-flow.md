@@ -72,7 +72,7 @@ Silver admins need login to review submitted reports. Reporters do not.
 
 Best for supported local tools.
 
-The web app gives the user a prompt and report code. The user pastes the prompt into Codex, Claude Code, or a Cursor-oriented local workflow when available.
+The web app gives the user a prompt, report session, and ready-to-run local command. The user pastes it into Codex, Claude Code, or a Cursor-oriented local workflow when available.
 
 The agent inspects local usage metadata, builds normalized rows, and sends them to Silver through the MCP server after preview.
 
@@ -81,10 +81,10 @@ The agent inspects local usage metadata, builds normalized rows, and sends them 
 Best when the user is comfortable running a command.
 
 ```bash
-npx -y @silver/usage-report import --session ABC123
+python -m cli.main submit-codex --session SESSION_ID --logs-db "C:\Users\YOU\.codex\logs_2.sqlite" --base-url https://open.silver.dev
 ```
 
-The CLI should run once, show a preview, and exit. It must not install an ongoing tracker or daemon.
+The CLI should run once, show a preview, ask for confirmation, submit aggregate rows, and exit. It must not install an ongoing tracker or daemon.
 
 ### Pasted Stats
 

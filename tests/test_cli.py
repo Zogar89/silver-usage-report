@@ -151,6 +151,57 @@ def test_cli_submit_previews_then_posts_report(capsys):
         report_file.unlink(missing_ok=True)
 
 
+def test_cli_submit_accepts_interactive_confirmation(capsys):
+    report_file = Path(".tmp_cli_submit_interactive.json")
+    calls: list[tuple[str, str, dict]] = []
+    try:
+        report_file.write_text(
+            json.dumps(
+                {
+                    "rows": [
+                        {
+                            "provider": "openai",
+                            "source": "json",
+                            "period_start": "2026-05-01T00:00:00Z",
+                            "period_end": "2026-05-02T00:00:00Z",
+                            "period_width": "1d",
+                            "total_tokens": 150,
+                            "cost_source": "manual",
+                            "confidence": "medium",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        def fake_post(url: str, payload: dict) -> dict:
+            calls.append((url, payload["method"], payload["json"]))
+            return {"status": "ok"}
+
+        with (
+            patch("builtins.input", return_value="y"),
+            patch("cli.main._post_json", side_effect=fake_post),
+        ):
+            exit_code = main(
+                [
+                    "submit",
+                    "--session",
+                    "session_123",
+                    "--file",
+                    str(report_file),
+                    "--base-url",
+                    "http://localhost:8000",
+                ]
+            )
+
+        assert exit_code == 0
+        assert len(calls) == 2
+        assert "Submit this report to Silver? [y/N]" in capsys.readouterr().out
+    finally:
+        report_file.unlink(missing_ok=True)
+
+
 def test_cli_preview_codex_reads_explicit_logs_db(capsys):
     db_path = Path(".tmp_cli_codex_logs.sqlite")
     connection = sqlite3.connect(db_path)

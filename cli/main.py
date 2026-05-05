@@ -89,7 +89,7 @@ def _submit_codex(session_id: str, logs_db_path: Path, base_url: str, yes: bool)
 
 def _submit_rows(session_id: str, rows, warnings, base_url: str, yes: bool, label: str) -> int:
     _print_preview(rows)
-    if not yes:
+    if not yes and not _confirm_submission():
         print("Refusing to submit without --yes")
         return 2
 
@@ -113,6 +113,16 @@ def _submit_rows(session_id: str, rows, warnings, base_url: str, yes: bool, labe
     _post_json(submit_url, {"method": "POST", "json": payload})
     print(f"Submitted {label} for session {session_id}")
     return 0
+
+
+def _confirm_submission() -> bool:
+    print("Submit this report to Silver? [y/N] ", end="")
+    try:
+        answer = input().strip().lower()
+    except (EOFError, OSError):
+        print()
+        return False
+    return answer in {"y", "yes"}
 
 
 def _print_preview(rows) -> None:
