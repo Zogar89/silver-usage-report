@@ -1,8 +1,10 @@
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from urllib import request
 
+from app.adapters.codex_local import preview_codex_local_usage
 from app.services.imports import parse_json_rows
 
 
@@ -12,6 +14,16 @@ def preview_report(payload: Any) -> dict[str, object]:
         "row_count": len(rows),
         "total_tokens": sum(row.total_tokens or 0 for row in rows),
         "warnings": [],
+    }
+
+
+def preview_codex_local(logs_db_path: str) -> dict[str, object]:
+    rows, warnings = preview_codex_local_usage(Path(logs_db_path))
+    return {
+        "row_count": len(rows),
+        "total_tokens": sum(row.total_tokens or 0 for row in rows),
+        "source": "codex_local_telemetry",
+        "warnings": [warning.model_dump(mode="json") for warning in warnings],
     }
 
 

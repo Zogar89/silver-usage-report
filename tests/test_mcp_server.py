@@ -1,6 +1,10 @@
 from unittest.mock import patch
 
-from mcp_server.main import get_report_status, preview_report, submit_report
+import json
+import sqlite3
+from pathlib import Path
+
+from mcp_server.main import get_report_status, preview_codex_local, preview_report, submit_report
 
 
 def test_mcp_preview_report_returns_totals_without_sensitive_data():
@@ -73,3 +77,37 @@ def test_mcp_get_report_status_uses_api():
         result = get_report_status("session_123", base_url="http://localhost:8000")
 
     assert result == {"status": "previewed", "row_count": 1}
+
+
+def test_mcp_preview_codex_local_uses_explicit_logs_db():
+    db_path = Path(".tmp_mcp_codex_logs.sqlite")
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "create table logs (target text not null, timestamp text not null, feedback_log_body text not null)"
+        )
+        connection.execute(
+            "insert into logs (target, timestamp, feedback_log_body) values (?, ?, ?)",
+            (
+                "codex_core::session::turn",
+                "2026-05-01T10:00:00Z",
+                json.dumps(
+                    {
+                        "message": "post sampling token usage",
+                        "input_tokens": 100,
+                        "output_tokens": 50,
+                    }
+                ),
+            ),
+        )
+        connection.commit()
+        connection.close()
+
+        result = preview_codex_local(str(db_path))
+
+        assert result["row_count"] == 1
+        assert result["total_tokens"] == 150
+        assert result["source"] == "codex_local_telemetry"
+    finally:
+        connection.close()
+        db_path.unlink(missing_ok=True)

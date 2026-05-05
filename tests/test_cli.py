@@ -1,4 +1,5 @@
 import json
+import sqlite3
 from pathlib import Path
 from unittest.mock import patch
 
@@ -148,3 +149,40 @@ def test_cli_submit_previews_then_posts_report(capsys):
         assert "Submitted report for session session_123" in capsys.readouterr().out
     finally:
         report_file.unlink(missing_ok=True)
+
+
+def test_cli_preview_codex_reads_explicit_logs_db(capsys):
+    db_path = Path(".tmp_cli_codex_logs.sqlite")
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "create table logs (target text not null, timestamp text not null, feedback_log_body text not null)"
+        )
+        connection.execute(
+            "insert into logs (target, timestamp, feedback_log_body) values (?, ?, ?)",
+            (
+                "codex_core::session::turn",
+                "2026-05-01T10:00:00Z",
+                json.dumps(
+                    {
+                        "message": "post sampling token usage",
+                        "model": "gpt-5.5",
+                        "input_tokens": 100,
+                        "output_tokens": 50,
+                    }
+                ),
+            ),
+        )
+        connection.commit()
+        connection.close()
+
+        exit_code = main(["preview-codex", "--logs-db", str(db_path)])
+
+        assert exit_code == 0
+        output = capsys.readouterr().out
+        assert "Rows: 1" in output
+        assert "Total tokens: 150" in output
+        assert "Source: codex_local_telemetry" in output
+    finally:
+        connection.close()
+        db_path.unlink(missing_ok=True)

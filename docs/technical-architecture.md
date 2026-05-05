@@ -222,6 +222,7 @@ Current commands:
 ```bash
 python -m cli.main preview report.json
 python -m cli.main preview-csv report.csv
+python -m cli.main preview-codex --logs-db "C:\Users\YOU\.codex\logs_2.sqlite"
 python -m cli.main submit --session SESSION_ID --file report.json --base-url http://localhost:8002 --yes
 ```
 
@@ -240,6 +241,9 @@ The MCP server should reuse the same schemas and validation logic as the web API
 The initial implementation exposes these as transport-agnostic helpers in
 `mcp_server/main.py` and pairs them with the agent prompt at
 `mcp_server/prompts/agent-assisted-import.md`.
+
+Codex local telemetry preview is also exposed as an explicit-path helper. It
+does not auto-discover user log files.
 
 ## Docker
 

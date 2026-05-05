@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any, Sequence
 from urllib import request
 
+from app.adapters.codex_local import preview_codex_local_usage
 from app.services.imports import parse_csv_rows, parse_json_rows
 
 
@@ -18,6 +19,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     preview_csv = subcommands.add_parser("preview-csv", help="Preview a normalized CSV report file.")
     preview_csv.add_argument("file", type=Path)
 
+    preview_codex = subcommands.add_parser(
+        "preview-codex",
+        help="Preview Codex local telemetry from an explicit logs_2.sqlite path.",
+    )
+    preview_codex.add_argument("--logs-db", required=True, type=Path)
+
     submit = subcommands.add_parser("submit", help="Preview and submit a JSON report to a session.")
     submit.add_argument("--session", required=True)
     submit.add_argument("--file", required=True, type=Path)
@@ -29,6 +36,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _preview_json(args.file)
     if args.command == "preview-csv":
         return _preview_csv(args.file)
+    if args.command == "preview-codex":
+        return _preview_codex(args.logs_db)
     if args.command == "submit":
         return _submit(args.session, args.file, args.base_url, args.yes)
     return 1
@@ -44,6 +53,15 @@ def _preview_json(path: Path) -> int:
 def _preview_csv(path: Path) -> int:
     rows = parse_csv_rows(path.read_text(encoding="utf-8"))
     _print_preview(rows)
+    return 0
+
+
+def _preview_codex(logs_db_path: Path) -> int:
+    rows, warnings = preview_codex_local_usage(logs_db_path)
+    _print_preview(rows)
+    print("Source: codex_local_telemetry")
+    for warning in warnings:
+        print(f"Warning: {warning.code} - {warning.message}")
     return 0
 
 

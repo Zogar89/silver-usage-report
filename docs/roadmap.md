@@ -75,10 +75,10 @@ Outcome: users without admin provider keys can still report useful usage.
 
 - Local log parser interface.
 - Codex local history usage investigation.
-- Codex local telemetry proof-of-concept using `logs_2.sqlite` and `post sampling token usage` rows.
-- Separate Codex auto-review/internal approval tokens from normal work tokens.
+- Codex local telemetry proof-of-concept using `logs_2.sqlite` and `post sampling token usage` rows. In progress: fixture-backed adapter added.
+- Separate Codex auto-review/internal approval tokens from normal work tokens. In progress: internal/approval-like events are excluded with a warning.
 - Claude Code parser investigation.
-- Codex parser investigation.
+- Codex parser investigation. In progress: CLI and MCP preview helpers require explicit SQLite path.
 - Cursor export/local telemetry investigation.
 - Redaction tests.
 

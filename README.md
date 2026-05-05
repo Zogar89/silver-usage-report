@@ -177,6 +177,12 @@ Preview a local CSV report file:
 python -m cli.main preview-csv report.csv
 ```
 
+Preview Codex local telemetry from an explicit SQLite path:
+
+```bash
+python -m cli.main preview-codex --logs-db "C:\Users\YOU\.codex\logs_2.sqlite"
+```
+
 Submit a local JSON report after explicit confirmation:
 
 ```bash

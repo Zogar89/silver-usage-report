@@ -5,6 +5,7 @@ Status: initial helper contract added.
 The repository now includes:
 
 - `mcp_server/main.py`: dependency-free helper functions for `preview_report`, `submit_report`, and `get_report_status`.
+- `preview_codex_local(logs_db_path)`: explicit-path helper for Codex local telemetry previews.
 - `mcp_server/prompts/agent-assisted-import.md`: the first prompt template for Codex, Claude Code, Cursor, or another local agent.
 - Shared validation through `app.schemas.usage_report`.
 
@@ -22,6 +23,26 @@ The required user flow remains:
 
 The helper layer must reject or avoid prompts, responses, source code, raw logs,
 API keys, environment variables, and full local paths.
+
+## Codex Local Preview
+
+The Codex helper is intentionally explicit-path only. It must not scan the user's
+home directory or auto-discover `.codex` files without the user's consent.
+
+CLI preview:
+
+```bash
+python -m cli.main preview-codex --logs-db "C:\Users\YOU\.codex\logs_2.sqlite"
+```
+
+The adapter currently queries only rows that match:
+
+- `target = "codex_core::session::turn"`
+- `feedback_log_body` containing `post sampling token usage`
+
+It ignores non-usage rows and excludes events that look like internal approval or
+auto-review usage. It emits `source: "codex_local_telemetry"` and confidence
+`medium`, because local telemetry is useful but not official provider billing.
 
 MCP-assisted import is the main automation idea for the employee-focused product.
 
