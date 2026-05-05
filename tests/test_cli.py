@@ -3,6 +3,8 @@ import sqlite3
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 import cli.main as cli_main
 from cli.main import main
 
@@ -39,6 +41,15 @@ def test_cli_preview_validates_json_report_file(capsys):
         assert "Total tokens: 150" in output
     finally:
         report_file.unlink(missing_ok=True)
+
+
+def test_cli_help_uses_collector_program_name(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["--help"])
+
+    assert exc.value.code == 0
+    output = capsys.readouterr().out
+    assert output.startswith("usage: silver-usage-collector")
 
 
 def test_cli_preview_csv_validates_csv_report_file(capsys):

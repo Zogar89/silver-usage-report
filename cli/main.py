@@ -16,7 +16,7 @@ HTTP_HEADERS = {
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="silver-usage-report")
+    parser = argparse.ArgumentParser(prog="silver-usage-collector")
     subcommands = parser.add_subparsers(dest="command", required=True)
 
     preview = subcommands.add_parser("preview", help="Preview a normalized JSON report file.")
