@@ -150,6 +150,20 @@ Reporter login is not required for the MVP. The report session should use a shor
 - Silver admin report review.
 - Data deletion page.
 
+## Web Design Direction
+
+The Silver Usage Report web UI must follow the existing Open Silver visual language at `https://open.silver.dev/`.
+
+Open Silver is the design reference for:
+
+- Brand placement, navigation, and page rhythm.
+- The "For Talent" / "For Companies" information architecture style when relevant.
+- Link and product-card presentation.
+- Typography scale, spacing, borders, button treatment, and neutral page layout.
+- Plain, direct copy that reads like part of the Silver ecosystem rather than a standalone SaaS dashboard.
+
+Silver Usage Report should feel like a native Open Silver tool hosted under `open.silver.dev`, not a separate branded product. Any custom UI for report sessions, import options, previews, confirmations, and admin review must adapt the Open Silver design system before introducing new visual patterns.
+
 ## MVP Import Strategy
 
 The MVP should support multiple ways for an individual to report usage:

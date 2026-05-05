@@ -2,7 +2,7 @@
 
 ## Phase 0: Discovery And Documentation
 
-Status: current.
+Status: complete.
 
 - Rename project from Silver Token Ledger to Silver Usage Report.
 - Document findings from the X thread.
@@ -15,30 +15,33 @@ Status: current.
 
 ## Phase 1: Report Session Skeleton
 
+Status: current.
+
 Outcome: users can create a report session and submit sample report data.
 
-- Add Dockerfile and docker-compose.
-- Add FastAPI app with Jinja2 + HTMX.
-- Add PostgreSQL, SQLAlchemy, and Alembic.
+- Add Dockerfile and docker-compose. In progress: initial files added.
+- Add FastAPI app with Jinja2 + HTMX. In progress: health route and start page added.
+- Add PostgreSQL, SQLAlchemy, and Alembic. In progress: SQLAlchemy models and initial Alembic migration added; SQLite is the local default and Docker uses PostgreSQL.
 - Add usage report route under Open Silver.
-- Create report session API.
-- Create short code/private-link report sessions without required reporter login.
+- Create report session API. In progress: create, preview, submit, and delete endpoints added with in-memory storage.
+- Create short code/private-link report sessions without required reporter login. In progress: in-memory service added for first slice.
 - Create sample usage report payload.
-- Render report preview.
+- Render report preview. In progress: API preview summary and first manual-entry web surface added.
 - Add confidence/source labels.
 - Add confirmation flow.
 - Add delete flow.
 - Add minimal Silver admin/review view.
+- Add minimal Silver admin/review view. In progress: `/admin/reports` lists sessions, status, row counts, and token totals.
 
 ## Phase 2: Manual, CSV, And JSON Fallback
 
 Outcome: every user has at least one path to submit a report.
 
 - Create CSV template.
-- Create JSON schema.
-- Create manual entry form.
-- Validate report payloads.
-- Label manual data as lower confidence.
+- Create JSON schema. In progress: Pydantic report rows and payloads are shared by API, CLI, and MCP helpers.
+- Create manual entry form. In progress: web manual preview, submit, and delete flow added.
+- Validate report payloads. In progress: token/date validation, sensitive-field rejection, and derived totals added.
+- Label manual data as lower confidence. In progress: manual rows are capped to low confidence.
 - Add duplicate period warnings.
 - Add synthetic fixture reports.
 
@@ -46,9 +49,9 @@ Outcome: every user has at least one path to submit a report.
 
 Outcome: users can run a local command and upload fixture or local aggregate data.
 
-- Create `@silver/usage-report` package.
+- Create `silver-usage-report` CLI package.
 - Implement session pairing.
-- Implement local preview.
+- Implement local preview. In progress: `python -m cli.main preview report.json`.
 - Implement aggregate upload.
 - Add schema validation.
 - Add test fixtures.
@@ -58,7 +61,7 @@ Outcome: users can run a local command and upload fixture or local aggregate dat
 
 Outcome: users can ask a local agent to inspect supported local usage sources and submit a structured report.
 
-- MCP server with strict `preview_report` and `submit_report` schemas.
+- MCP server with strict `preview_report` and `submit_report` schemas. In progress: dependency-free helper functions added before binding to a concrete MCP transport.
 - Prompt template for Codex, Claude Code, and Cursor-oriented workflows.
 - Sensitive-field rejection.
 - Evidence metadata for local telemetry/stat sources.

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="stack">
+    <p class="eyebrow">For Silver</p>
+    <h1>Admin review</h1>
+    <p class="lede">Review submitted aggregate usage reports and confidence-labeled intake data.</p>
+  </section>
+
+  <section class="panel">
+    <table>
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Status</th>
+          <th>Rows</th>
+          <th>Total tokens</th>
+          <th>Submitted</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for report in reports %}
+          <tr>
+            <td>{{ report.public_code }}</td>
+            <td>{{ report.status }}</td>
+            <td>{{ report.row_count }}</td>
+            <td>{{ report.total_tokens }}</td>
+            <td>{{ report.submitted_at or "Not submitted" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endblock %}

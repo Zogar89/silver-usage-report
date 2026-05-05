@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="stack hero">
+    <p class="eyebrow">For Talent</p>
+    <h1>Silver Usage Report</h1>
+    <p class="lede">Submit aggregate AI usage metrics to Silver without sharing prompts, responses, code, logs, or keys.</p>
+    <div class="actions">
+      <form method="post" action="/reports/sessions">
+        <button type="submit">Start report</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="link-grid" aria-label="Report paths">
+    <article class="link-card">
+      <span>Manual</span>
+      <p>Enter totals from any AI tool and label them clearly as self-reported.</p>
+    </article>
+    <article class="link-card">
+      <span>CSV or JSON</span>
+      <p>Upload or paste structured rows when a tool export is available.</p>
+    </article>
+    <article class="link-card">
+      <span>Local import</span>
+      <p>Use a one-shot helper later for Codex, Cursor, or Claude Code aggregates.</p>
+    </article>
+  </section>
+{% endblock %}

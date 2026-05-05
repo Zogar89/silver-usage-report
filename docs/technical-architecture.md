@@ -13,7 +13,7 @@ Chosen stack:
 - Alembic.
 - PostgreSQL in Docker.
 - SQLite only for lightweight local experiments if needed.
-- Typer for CLI.
+- A small argparse CLI for the first skeleton; Typer can replace it once the package interface stabilizes.
 - Python MCP server for agent-assisted import.
 - pytest for tests.
 
@@ -106,6 +106,8 @@ The web app serves:
 - Confirmation page.
 - Delete report page.
 - Silver admin review pages.
+
+The web interface must match the existing Open Silver site at `https://open.silver.dev/`. Templates and CSS should be treated as an extension of that site: reuse the same brand feel, navigation structure, link/product-card conventions, spacing, typography, and restrained visual style before adding any new component patterns.
 
 HTMX should be used for:
 
@@ -200,7 +202,7 @@ Validation rules:
 
 ## CLI
 
-Typer CLI:
+Initial CLI:
 
 ```bash
 silver-usage-report import --session ABC123 --source codex

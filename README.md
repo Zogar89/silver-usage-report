@@ -109,9 +109,19 @@ It must not upload:
 
 ```text
 .
+├── app
+│   ├── main.py
+│   ├── core
+│   ├── schemas
+│   ├── services
+│   └── web
+├── tests
 ├── README.md
 ├── CONTRIBUTING.md
+├── Dockerfile
+├── docker-compose.yml
 ├── LICENSE
+├── pyproject.toml
 └── docs
     ├── architecture.md
     ├── discovery-notes.md
@@ -122,6 +132,42 @@ It must not upload:
     ├── roadmap.md
     ├── security-privacy.md
     └── trust-model.md
+```
+
+## Local Development
+
+Run tests:
+
+```bash
+python -m pytest
+```
+
+Run the web app:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Or with Docker:
+
+```bash
+docker compose up --build
+```
+
+Initial API endpoints:
+
+```text
+POST   /api/usage-report/sessions
+POST   /api/usage-report/sessions/{session_id}/preview
+POST   /api/usage-report/sessions/{session_id}/preview/csv
+POST   /api/usage-report/sessions/{session_id}/submit
+DELETE /api/usage-report/sessions/{session_id}
+```
+
+Preview a local JSON report file:
+
+```bash
+python -m cli.main preview report.json
 ```
 
 ## Candidate CLI Flow

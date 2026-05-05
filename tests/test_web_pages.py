@@ -1,0 +1,58 @@
+from fastapi.testclient import TestClient
+
+from app.main import app
+
+
+def _session_id_from(html: str) -> str:
+    marker = 'data-session-id="'
+    start = html.index(marker) + len(marker)
+    end = html.index('"', start)
+    return html[start:end]
+
+
+def test_report_session_page_shows_manual_entry_preview_surface():
+    client = TestClient(app)
+
+    response = client.post("/reports/sessions")
+
+    assert response.status_code == 200
+    html = response.text
+    assert "Session code" in html
+    assert "Manual usage row" in html
+    assert "Preview report" in html
+    assert "Data shared with Silver" in html
+
+
+def test_manual_web_flow_previews_submits_and_deletes_report():
+    client = TestClient(app)
+    response = client.post("/reports/sessions")
+    session_id = _session_id_from(response.text)
+
+    preview = client.post(
+        f"/reports/sessions/{session_id}/preview",
+        data={
+            "provider": "openai",
+            "tool": "codex",
+            "period_start": "2026-05-01T00:00:00Z",
+            "period_end": "2026-05-02T00:00:00Z",
+            "input_tokens": "100",
+            "output_tokens": "50",
+        },
+    )
+
+    assert preview.status_code == 200
+    assert "Preview ready" in preview.text
+    assert "150" in preview.text
+    assert "Confirm submission" in preview.text
+
+    submitted = client.post(f"/reports/sessions/{session_id}/submit")
+
+    assert submitted.status_code == 200
+    assert "Report submitted" in submitted.text
+    assert "150" in submitted.text
+
+    deleted = client.post(f"/reports/sessions/{session_id}/delete")
+
+    assert deleted.status_code == 200
+    assert "Report deleted" in deleted.text
+    assert "0 rows retained" in deleted.text

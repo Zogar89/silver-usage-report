@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="stack" data-session-id="{{ session.id }}">
+    <p class="eyebrow">Usage intake</p>
+    <h1>Report session</h1>
+    {% if banner %}
+      <p class="notice">{{ banner }}</p>
+    {% endif %}
+    <div class="session-strip">
+      <dl>
+        <dt>Session code</dt>
+        <dd>{{ session.public_code }}</dd>
+        <dt>Status</dt>
+        <dd>{{ session.status }}</dd>
+      </dl>
+    </div>
+  </section>
+
+  <section class="two-column">
+    <form class="panel" method="post" action="/reports/sessions/{{ session.id }}/preview">
+      <div class="panel-heading">
+        <p class="eyebrow">Manual fallback</p>
+        <h2>Manual usage row</h2>
+      </div>
+
+      <label>
+        Provider
+        <select name="provider">
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic</option>
+          <option value="gemini">Gemini</option>
+          <option value="xai">xAI</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+
+      <label>
+        Tool
+        <select name="tool">
+          <option value="codex">Codex</option>
+          <option value="cursor">Cursor</option>
+          <option value="claude_code">Claude Code</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+
+      <div class="field-grid">
+        <label>
+          Period start
+          <input name="period_start" type="datetime-local" value="2026-05-01T00:00">
+        </label>
+        <label>
+          Period end
+          <input name="period_end" type="datetime-local" value="2026-05-02T00:00">
+        </label>
+        <label>
+          Input tokens
+          <input name="input_tokens" type="number" min="0" inputmode="numeric">
+        </label>
+        <label>
+          Output tokens
+          <input name="output_tokens" type="number" min="0" inputmode="numeric">
+        </label>
+      </div>
+
+      <button type="submit">Preview report</button>
+    </form>
+
+    <aside class="panel">
+      <div class="panel-heading">
+        <p class="eyebrow">Preview</p>
+        <h2>Data shared with Silver</h2>
+      </div>
+      {% if summary.row_count %}
+        <dl class="preview-summary">
+          <dt>Rows</dt>
+          <dd>{{ summary.row_count }}</dd>
+          <dt>Total tokens</dt>
+          <dd>{{ summary.total_tokens }}</dd>
+          <dt>Confidence</dt>
+          <dd>{{ summary.rows[0].confidence }}</dd>
+        </dl>
+        {% if session.status == "previewed" %}
+          <form method="post" action="/reports/sessions/{{ session.id }}/submit">
+            <button type="submit">Confirm submission</button>
+          </form>
+        {% endif %}
+        {% if session.status == "submitted" %}
+          <form method="post" action="/reports/sessions/{{ session.id }}/delete">
+            <button class="secondary" type="submit">Delete report data</button>
+          </form>
+        {% endif %}
+      {% else %}
+        <ul class="check-list">
+          <li>Provider, tool, model when known</li>
+          <li>Reporting period and aggregate token counts</li>
+          <li>Cost source, confidence, and evidence metadata</li>
+        </ul>
+      {% endif %}
+      {% if session.status == "deleted" %}
+        <p class="muted">0 rows retained.</p>
+      {% endif %}
+      <p class="muted">Prompts, responses, code, raw logs, environment variables, and API keys are outside the report boundary.</p>
+    </aside>
+  </section>
+{% endblock %}
