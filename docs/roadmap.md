@@ -180,7 +180,7 @@ The first implementation should prove the report workflow:
 1. Create a report session.
 2. Accept sample/manual/CSV data.
 3. Preview normalized rows.
-4. Confirm submission.
+4. Confirmar envio.
 5. Let Silver review the report.
 
 After that, add the CLI importer and local source adapters to improve automation and confidence.

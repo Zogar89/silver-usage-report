@@ -109,6 +109,12 @@ The web app serves:
 
 The web interface must match the existing Open Silver site at `https://open.silver.dev/`. Templates and CSS should be treated as an extension of that site: reuse the same brand feel, navigation structure, link/product-card conventions, spacing, typography, and restrained visual style before adding any new component patterns.
 
+The rendered web UI is Spanish-first. Jinja templates, route banners, form
+labels, admin headings, navigation labels, and empty states should use Spanish
+copy by default. Keep code identifiers, schema fields, CLI commands, and
+integration-specific values in English when they are part of a technical
+contract.
+
 HTMX should be used for:
 
 - Adding/removing report rows.

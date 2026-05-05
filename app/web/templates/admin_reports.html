@@ -2,20 +2,20 @@
 
 {% block content %}
   <section class="stack">
-    <p class="eyebrow">For Silver</p>
-    <h1>Admin review</h1>
-    <p class="lede">Review submitted aggregate usage reports and confidence-labeled intake data.</p>
+    <p class="eyebrow">Para Silver</p>
+    <h1>Revision admin</h1>
+    <p class="lede">Revisa reportes agregados de uso enviados y datos de carga etiquetados por confianza.</p>
   </section>
 
   <section class="panel">
     <table>
       <thead>
         <tr>
-          <th>Code</th>
-          <th>Status</th>
-          <th>Rows</th>
-          <th>Total tokens</th>
-          <th>Submitted</th>
+          <th>Codigo</th>
+          <th>Estado</th>
+          <th>Filas</th>
+          <th>Tokens totales</th>
+          <th>Enviado</th>
         </tr>
       </thead>
       <tbody>
@@ -25,7 +25,7 @@
             <td>{{ report.status }}</td>
             <td>{{ report.row_count }}</td>
             <td>{{ report.total_tokens }}</td>
-            <td>{{ report.submitted_at or "Not submitted" }}</td>
+            <td>{{ report.submitted_at or "No enviado" }}</td>
           </tr>
         {% endfor %}
       </tbody>

@@ -71,7 +71,7 @@ def test_admin_review_lists_submitted_report_totals():
     response = client.get("/admin/reports")
 
     assert response.status_code == 200
-    assert "Admin review" in response.text
+    assert "Revision admin" in response.text
     assert session["public_code"] in response.text
     assert "submitted" in response.text
     assert "150" in response.text

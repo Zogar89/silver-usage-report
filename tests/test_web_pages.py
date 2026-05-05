@@ -17,12 +17,12 @@ def test_report_session_page_shows_manual_entry_preview_surface():
 
     assert response.status_code == 200
     html = response.text
-    assert "Session code" in html
-    assert "Manual usage row" in html
-    assert "CSV import" in html
-    assert "JSON import" in html
-    assert "Preview report" in html
-    assert "Data shared with Silver" in html
+    assert "Codigo de sesion" in html
+    assert "Carga manual" in html
+    assert "Importar CSV" in html
+    assert "Importar JSON" in html
+    assert "Previsualizar reporte" in html
+    assert "Datos compartidos con Silver" in html
 
 
 def test_report_session_page_prioritizes_local_agent_cli_import():
@@ -33,11 +33,26 @@ def test_report_session_page_prioritizes_local_agent_cli_import():
     assert response.status_code == 200
     html = response.text
     session_id = _session_id_from(html)
-    assert "Local agent import" in html
+    assert "Importacion con agente local" in html
     assert "python -m cli.main submit-codex" in html
     assert f"--session {session_id}" in html
     assert "--base-url http://testserver" in html
-    assert html.index("Local agent import") < html.index("Manual usage row")
+    assert html.index("Importacion con agente local") < html.index("Carga manual")
+
+
+def test_home_page_uses_spanish_copy_and_language_attribute():
+    client = TestClient(app)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    html = response.text
+    assert '<html lang="es">' in html
+    assert "Para talento" in html
+    assert "Enviar reporte" in html
+    assert "metricas agregadas" in html
+    assert "Start report" not in html
+    assert "For Talent" not in html
 
 
 def test_manual_web_flow_previews_submits_and_deletes_report():
@@ -58,21 +73,21 @@ def test_manual_web_flow_previews_submits_and_deletes_report():
     )
 
     assert preview.status_code == 200
-    assert "Preview ready" in preview.text
+    assert "Previsualizacion lista" in preview.text
     assert "150" in preview.text
-    assert "Confirm submission" in preview.text
+    assert "Confirmar envio" in preview.text
 
     submitted = client.post(f"/reports/sessions/{session_id}/submit")
 
     assert submitted.status_code == 200
-    assert "Report submitted" in submitted.text
+    assert "Reporte enviado" in submitted.text
     assert "150" in submitted.text
 
     deleted = client.post(f"/reports/sessions/{session_id}/delete")
 
     assert deleted.status_code == 200
-    assert "Report deleted" in deleted.text
-    assert "0 rows retained" in deleted.text
+    assert "Reporte eliminado" in deleted.text
+    assert "0 filas retenidas" in deleted.text
 
 
 def test_csv_web_flow_previews_rows_in_table():
@@ -91,8 +106,8 @@ def test_csv_web_flow_previews_rows_in_table():
     )
 
     assert preview.status_code == 200
-    assert "CSV preview ready" in preview.text
-    assert "Preview rows" in preview.text
+    assert "Previsualizacion CSV lista" in preview.text
+    assert "Filas previsualizadas" in preview.text
     assert "codex" in preview.text
     assert "150" in preview.text
 
@@ -115,7 +130,7 @@ def test_json_web_flow_previews_rows_in_table():
     )
 
     assert preview.status_code == 200
-    assert "JSON preview ready" in preview.text
-    assert "Preview rows" in preview.text
+    assert "Previsualizacion JSON lista" in preview.text
+    assert "Filas previsualizadas" in preview.text
     assert "json" in preview.text
     assert "150" in preview.text

@@ -157,12 +157,22 @@ The Silver Usage Report web UI must follow the existing Open Silver visual langu
 Open Silver is the design reference for:
 
 - Brand placement, navigation, and page rhythm.
-- The "For Talent" / "For Companies" information architecture style when relevant.
+- The "Para talento" / "Para empresas" information architecture style when relevant.
 - Link and product-card presentation.
 - Typography scale, spacing, borders, button treatment, and neutral page layout.
 - Plain, direct copy that reads like part of the Silver ecosystem rather than a standalone SaaS dashboard.
 
 Silver Usage Report should feel like a native Open Silver tool hosted under `open.silver.dev`, not a separate branded product. Any custom UI for report sessions, import options, previews, confirmations, and admin review must adapt the Open Silver design system before introducing new visual patterns.
+
+## Language Direction
+
+The product UI is Spanish-first. Reporter-facing and admin-facing web copy must
+be written in Spanish, including navigation, page headings, form labels, helper
+text, banners, warnings, empty states, table headings, and action buttons.
+
+Technical contracts may remain in English where precision matters: API field
+names, enum values, CLI commands, provider/tool identifiers, package names, and
+third-party product names.
 
 ## MVP Import Strategy
 

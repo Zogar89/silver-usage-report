@@ -56,11 +56,11 @@ async def preview_manual_report_session(
     row = _manual_row_from_form(form)
     warning = ReportWarning(
         code="manual_data",
-        message="Manual data is lower confidence.",
+        message="Los datos manuales tienen menor confianza.",
     )
     summary = preview_report_session(db, session, rows=[row], warnings=[warning])
     session = _get_session_or_404(db, session_id)
-    return _render_session(request, session, summary=summary, banner="Preview ready")
+    return _render_session(request, session, summary=summary, banner="Previsualizacion lista")
 
 
 @router.post("/reports/sessions/{session_id}/preview-csv", response_class=HTMLResponse)
@@ -72,10 +72,10 @@ async def preview_csv_report_session(
     session = _get_session_or_404(db, session_id)
     form = _parse_urlencoded_form(await request.body())
     rows = parse_csv_rows(form.get("csv_text", ""))
-    warning = ReportWarning(code="csv_import", message="Rows were imported from CSV.")
+    warning = ReportWarning(code="csv_import", message="Las filas fueron importadas desde CSV.")
     summary = preview_report_session(db, session, rows=rows, warnings=[warning])
     session = _get_session_or_404(db, session_id)
-    return _render_session(request, session, summary=summary, banner="CSV preview ready")
+    return _render_session(request, session, summary=summary, banner="Previsualizacion CSV lista")
 
 
 @router.post("/reports/sessions/{session_id}/preview-json", response_class=HTMLResponse)
@@ -87,10 +87,10 @@ async def preview_json_report_session(
     session = _get_session_or_404(db, session_id)
     form = _parse_urlencoded_form(await request.body())
     rows = parse_json_rows(json.loads(form.get("json_text", "{}")))
-    warning = ReportWarning(code="json_import", message="Rows were imported from JSON.")
+    warning = ReportWarning(code="json_import", message="Las filas fueron importadas desde JSON.")
     summary = preview_report_session(db, session, rows=rows, warnings=[warning])
     session = _get_session_or_404(db, session_id)
-    return _render_session(request, session, summary=summary, banner="JSON preview ready")
+    return _render_session(request, session, summary=summary, banner="Previsualizacion JSON lista")
 
 
 @router.post("/reports/sessions/{session_id}/submit", response_class=HTMLResponse)
@@ -113,7 +113,7 @@ def submit_manual_report_session(
     )
     summary = submit_report_session(db, session, payload)
     session = _get_session_or_404(db, session_id)
-    return _render_session(request, session, summary=summary, banner="Report submitted")
+    return _render_session(request, session, summary=summary, banner="Reporte enviado")
 
 
 @router.post("/reports/sessions/{session_id}/delete", response_class=HTMLResponse)
@@ -125,7 +125,7 @@ def delete_manual_report_session(
     session = _get_session_or_404(db, session_id)
     summary = delete_report_session_data(db, session)
     session = _get_session_or_404(db, session_id)
-    return _render_session(request, session, summary=summary, banner="Report deleted")
+    return _render_session(request, session, summary=summary, banner="Reporte eliminado")
 
 
 @router.get("/admin/reports", response_class=HTMLResponse)
@@ -139,7 +139,7 @@ def admin_reports(
     return templates.TemplateResponse(
         request,
         "admin_reports.html",
-        {"title": "Admin review", "reports": reports},
+        {"title": "Revision admin", "reports": reports},
     )
 
 
@@ -169,7 +169,7 @@ def _render_session(
         request,
         "session.html",
         {
-            "title": "Report session",
+            "title": "Sesion de reporte",
             "session": session,
             "summary": summary or summarize_report_session(session),
             "banner": banner,

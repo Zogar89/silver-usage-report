@@ -2,16 +2,16 @@
 
 {% block content %}
   <section class="stack" data-session-id="{{ session.id }}">
-    <p class="eyebrow">Usage intake</p>
-    <h1>Report session</h1>
+    <p class="eyebrow">Carga de uso</p>
+    <h1>Sesion de reporte</h1>
     {% if banner %}
       <p class="notice">{{ banner }}</p>
     {% endif %}
     <div class="session-strip">
       <dl>
-        <dt>Session code</dt>
+        <dt>Codigo de sesion</dt>
         <dd>{{ session.public_code }}</dd>
-        <dt>Status</dt>
+        <dt>Estado</dt>
         <dd>{{ session.status }}</dd>
       </dl>
     </div>
@@ -21,119 +21,119 @@
     <div class="stack">
       <section class="panel command-panel">
         <div class="panel-heading">
-          <p class="eyebrow">Primary path</p>
-          <h2>Local agent import</h2>
+          <p class="eyebrow">Camino principal</p>
+          <h2>Importacion con agente local</h2>
         </div>
-        <p>Run this from the project checkout or paste it into a local coding agent. It reads only aggregate Codex usage telemetry from the explicit SQLite path, previews the totals, asks for confirmation, and submits the report to Silver.</p>
+        <p>Corri esto desde el checkout del proyecto o pegalo en un agente local. Lee solo telemetria agregada de uso de Codex desde la ruta SQLite explicita, previsualiza los totales, pide confirmacion y envia el reporte a Silver.</p>
         <label>
           Codex local collector
           <textarea class="command-box" rows="3" readonly>{{ codex_cli_command }}</textarea>
         </label>
         <ul class="check-list compact">
-          <li>Preview happens before submit.</li>
-          <li>No prompts, responses, source code, raw logs, environment variables, or API keys are sent.</li>
-          <li>Use the JSON, CSV, or manual forms only when local telemetry is unavailable.</li>
+          <li>La previsualizacion ocurre antes del envio.</li>
+          <li>No se envian prompts, respuestas, codigo fuente, logs crudos, variables de entorno ni API keys.</li>
+          <li>Usa JSON, CSV o carga manual solo si no hay telemetria local disponible.</li>
         </ul>
       </section>
 
       <form class="panel" method="post" action="/reports/sessions/{{ session.id }}/preview">
         <div class="panel-heading">
-          <p class="eyebrow">Manual fallback</p>
-          <h2>Manual usage row</h2>
+          <p class="eyebrow">Fallback manual</p>
+          <h2>Carga manual</h2>
         </div>
 
         <label>
-          Provider
+          Proveedor
           <select name="provider">
             <option value="openai">OpenAI</option>
             <option value="anthropic">Anthropic</option>
             <option value="gemini">Gemini</option>
             <option value="xai">xAI</option>
-            <option value="other">Other</option>
+            <option value="other">Otro</option>
           </select>
         </label>
 
         <label>
-          Tool
+          Herramienta
           <select name="tool">
             <option value="codex">Codex</option>
             <option value="cursor">Cursor</option>
             <option value="claude_code">Claude Code</option>
-            <option value="other">Other</option>
+            <option value="other">Otra</option>
           </select>
         </label>
 
         <div class="field-grid">
           <label>
-            Period start
+            Inicio del periodo
             <input name="period_start" type="datetime-local" value="2026-05-01T00:00">
           </label>
           <label>
-            Period end
+            Fin del periodo
             <input name="period_end" type="datetime-local" value="2026-05-02T00:00">
           </label>
           <label>
-            Input tokens
+            Tokens de entrada
             <input name="input_tokens" type="number" min="0" inputmode="numeric">
           </label>
           <label>
-            Output tokens
+            Tokens de salida
             <input name="output_tokens" type="number" min="0" inputmode="numeric">
           </label>
         </div>
 
-        <button type="submit">Preview report</button>
+        <button type="submit">Previsualizar reporte</button>
       </form>
 
       <form class="panel" method="post" action="/reports/sessions/{{ session.id }}/preview-csv">
         <div class="panel-heading">
-          <p class="eyebrow">Structured fallback</p>
-          <h2>CSV import</h2>
+          <p class="eyebrow">Fallback estructurado</p>
+          <h2>Importar CSV</h2>
         </div>
         <label>
-          CSV rows
+          Filas CSV
           <textarea name="csv_text" rows="7" placeholder="provider,tool,source,period_start,period_end,period_width,input_tokens,output_tokens,cost_source,confidence"></textarea>
         </label>
-        <button type="submit">Preview CSV</button>
+        <button type="submit">Previsualizar CSV</button>
       </form>
 
       <form class="panel" method="post" action="/reports/sessions/{{ session.id }}/preview-json">
         <div class="panel-heading">
-          <p class="eyebrow">Structured fallback</p>
-          <h2>JSON import</h2>
+          <p class="eyebrow">Fallback estructurado</p>
+          <h2>Importar JSON</h2>
         </div>
         <label>
-          JSON payload
+          Payload JSON
           <textarea name="json_text" rows="7" placeholder='{"rows":[{"provider":"openai","source":"json",...}]}'></textarea>
         </label>
-        <button type="submit">Preview JSON</button>
+        <button type="submit">Previsualizar JSON</button>
       </form>
     </div>
 
     <aside class="panel">
       <div class="panel-heading">
-        <p class="eyebrow">Preview</p>
-        <h2>Data shared with Silver</h2>
+        <p class="eyebrow">Previsualizacion</p>
+        <h2>Datos compartidos con Silver</h2>
       </div>
       {% if summary.row_count %}
         <dl class="preview-summary">
-          <dt>Rows</dt>
+          <dt>Filas</dt>
           <dd>{{ summary.row_count }}</dd>
-          <dt>Total tokens</dt>
+          <dt>Tokens totales</dt>
           <dd>{{ summary.total_tokens }}</dd>
-          <dt>Confidence</dt>
+          <dt>Confianza</dt>
           <dd>{{ summary.rows[0].confidence }}</dd>
         </dl>
         <div class="table-wrap">
-          <h3>Preview rows</h3>
+          <h3>Filas previsualizadas</h3>
           <table>
             <thead>
               <tr>
-                <th>Provider</th>
-                <th>Tool</th>
-                <th>Source</th>
+                <th>Proveedor</th>
+                <th>Herramienta</th>
+                <th>Fuente</th>
                 <th>Tokens</th>
-                <th>Confidence</th>
+                <th>Confianza</th>
               </tr>
             </thead>
             <tbody>
@@ -158,25 +158,25 @@
         {% endif %}
         {% if session.status == "previewed" %}
           <form method="post" action="/reports/sessions/{{ session.id }}/submit">
-            <button type="submit">Confirm submission</button>
+            <button type="submit">Confirmar envio</button>
           </form>
         {% endif %}
         {% if session.status == "submitted" %}
           <form method="post" action="/reports/sessions/{{ session.id }}/delete">
-            <button class="secondary" type="submit">Delete report data</button>
+            <button class="secondary" type="submit">Eliminar datos del reporte</button>
           </form>
         {% endif %}
       {% else %}
         <ul class="check-list">
-          <li>Provider, tool, model when known</li>
-          <li>Reporting period and aggregate token counts</li>
-          <li>Cost source, confidence, and evidence metadata</li>
+          <li>Proveedor, herramienta y modelo cuando se conozcan</li>
+          <li>Periodo reportado y conteos agregados de tokens</li>
+          <li>Fuente de costo, confianza y metadata de evidencia</li>
         </ul>
       {% endif %}
       {% if session.status == "deleted" %}
-        <p class="muted">0 rows retained.</p>
+        <p class="muted">0 filas retenidas.</p>
       {% endif %}
-      <p class="muted">Prompts, responses, code, raw logs, environment variables, and API keys are outside the report boundary.</p>
+      <p class="muted">Prompts, respuestas, codigo, logs crudos, variables de entorno y API keys quedan fuera del limite del reporte.</p>
     </aside>
   </section>
 {% endblock %}

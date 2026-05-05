@@ -61,6 +61,16 @@ Silver Usage Report will be a Dockerized Python app:
 - Typer for the one-shot CLI.
 - Python MCP server for agent-assisted import.
 
+## Language Policy
+
+The web product is Spanish-first from now on. All visible UI copy, navigation,
+buttons, banners, empty states, admin labels, and reporter-facing instructions
+must be written in Spanish.
+
+Code identifiers, API fields, CLI commands, schema values, provider names, and
+third-party product names may remain in English when that is the project or
+integration contract.
+
 ## Proposed MVP
 
 The first useful version should optimize for report completion:
@@ -161,9 +171,9 @@ Docker Compose exposes the web app on `http://localhost:8002`. PostgreSQL stays
 inside the Compose network to avoid colliding with a local database on port
 `5432`. Both services define healthchecks.
 
-Admin review is available at `/admin/reports`. In development it can be left open,
-but production must configure `ADMIN_TOKEN`; requests then need the `x-admin-token`
-header.
+La revision admin esta disponible en `/admin/reports`. En desarrollo puede quedar
+abierta, pero produccion debe configurar `ADMIN_TOKEN`; las requests necesitan el
+header `x-admin-token`.
 
 Initial API endpoints:
 
