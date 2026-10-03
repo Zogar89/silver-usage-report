@@ -32,7 +32,7 @@ def test_cli_preview_codex_reads_explicit_logs_db(capsys):
             "insert into logs (target, timestamp, feedback_log_body) values (?, ?, ?)",
             (
                 "codex_core::session::turn",
-                "2026-05-01T10:00:00Z",
+                (datetime.now(UTC) - timedelta(days=1)).isoformat(),
                 json.dumps(
                     {
                         "message": "post sampling token usage",
@@ -67,7 +67,7 @@ def test_cli_preview_codex_reads_sessions_dir(capsys):
         rollout_path.write_text(
             json.dumps(
                 {
-                    "timestamp": "2026-04-25T05:21:56Z",
+                    "timestamp": (datetime.now(UTC) - timedelta(days=1)).isoformat(),
                     "type": "event_msg",
                     "payload": {
                         "type": "token_count",
@@ -343,7 +343,7 @@ def _write_codex_usage_row(connection: sqlite3.Connection) -> None:
         "insert into logs (target, timestamp, feedback_log_body) values (?, ?, ?)",
         (
             "codex_core::session::turn",
-            "2026-05-01T10:00:00Z",
+            (datetime.now(UTC) - timedelta(days=1)).isoformat(),
             json.dumps(
                 {
                     "message": "post sampling token usage",

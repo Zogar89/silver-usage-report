@@ -213,13 +213,19 @@ def test_report_session_collector_script_downloads_and_runs_collector():
     assert f'$PrivateToken = "{private_token}"' in script.text
     assert '$BaseUrl = "http://testserver"' in script.text
     assert "$Days = 90" in script.text
+    assert '$CollectorVersion = "0.5.1-powershell"' in script.text
     assert 'Write-Host "Silver Usage Collector"' in script.text
     assert 'Write-Host "Archivos rollout encontrados: $($Files.Count)"' in script.text
     assert 'Write-Host "Leyendo archivos: $Processed/$($Files.Count)"' in script.text
     assert "function Read-TailLines" in script.text
+    assert "function Read-HeadLines" in script.text
     assert "function Find-SessionMetadata" in script.text
+    assert "$HeadByteCount = 262144" in script.text
     assert "$TailWindows = @(1048576, 4194304, 16777216)" in script.text
     assert "'\"model\"', '\"model_provider\"', '\"model_context_window\"'" in script.text
+    assert "$HeadLines = Read-HeadLines $File.FullName $HeadByteCount" in script.text
+    assert "if ($null -eq $Latest) {" in script.text
+    assert "if ($null -eq $Latest -or $null -eq $Metadata)" not in script.text
     assert "Archivos leidos completos por fallback" in script.text
     assert 'Write-Host "Previsualizacion local. Nada se envio a Silver todavia."' in script.text
     assert 'Write-Host "Esto es lo que se va a enviar si confirmas:"' in script.text

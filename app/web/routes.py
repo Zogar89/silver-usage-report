@@ -558,7 +558,7 @@ $SessionId = "__SESSION_ID__"
 $BaseUrl = "__BASE_URL__"
 $PrivateToken = "__PRIVATE_TOKEN__"
 $Days = 90
-$CollectorVersion = "0.5.0-powershell"
+$CollectorVersion = "0.5.1-powershell"
 $SessionsDir = Join-Path $env:USERPROFILE ".codex\sessions"
 $Since = (Get-Date).ToUniversalTime().AddDays(-$Days)
 $script:Stage = "inicio"
@@ -806,6 +806,20 @@ function Read-TailLines($Path, $ByteCount) {
   }
 }
 
+function Read-HeadLines($Path, $ByteCount) {
+  $Stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+  try {
+    $BytesToRead = [int][Math]::Min($Stream.Length, [int64]$ByteCount)
+    if ($BytesToRead -le 0) { return @() }
+    $Buffer = New-Object byte[] $BytesToRead
+    $Read = $Stream.Read($Buffer, 0, $BytesToRead)
+    $Text = [System.Text.Encoding]::UTF8.GetString($Buffer, 0, $Read)
+    return [System.Text.RegularExpressions.Regex]::Split($Text, "\r?\n")
+  } finally {
+    $Stream.Dispose()
+  }
+}
+
 $script:Stage = "lectura de sesiones locales"
 if (-not (Test-Path $SessionsDir)) {
   throw "No se encontro $SessionsDir. Abri Codex al menos una vez o revisa la instalacion."
@@ -821,6 +835,7 @@ if ($Files.Count -eq 0) {
 $Events = [System.Collections.Generic.List[object]]::new()
 $Processed = 0
 $FallbackReads = 0
+$HeadByteCount = 262144
 $TailWindows = @(1048576, 4194304, 16777216)
 $script:Stage = "lectura de rollouts de Codex"
 foreach ($File in $Files) {
@@ -840,12 +855,14 @@ foreach ($File in $Files) {
     }
     if ($null -ne $Latest -and $null -ne $Metadata) { break }
   }
-  if ($null -eq $Latest -or $null -eq $Metadata) {
+  if ($null -eq $Metadata) {
+    $HeadLines = Read-HeadLines $File.FullName $HeadByteCount
+    $Metadata = Find-SessionMetadata $HeadLines
+  }
+  if ($null -eq $Latest) {
     $FallbackReads += 1
     $CandidateLines = @(Select-String -LiteralPath $File.FullName -SimpleMatch -Pattern '"token_count"', '"total_token_usage"', '"usage"', '"model"', '"model_provider"', '"model_context_window"' -ErrorAction SilentlyContinue | ForEach-Object { $_.Line })
-    if ($null -eq $Latest) {
-      $Latest = Find-LatestUsage $CandidateLines
-    }
+    $Latest = Find-LatestUsage $CandidateLines
     if ($null -eq $Metadata) {
       $Metadata = Find-SessionMetadata $CandidateLines
     }
